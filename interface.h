@@ -1,11 +1,11 @@
 #ifndef InterfaceHeader
 #define InterfaceHeader
 
-/* Header file for the definition of the project inetrface */
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
+/* Header file for the definition of the project interface */
+#include "geral.h"
+
+
+#define MAX_NODES 32
 
 void interface(char **args);
 char *handle_args(char *arg, char *key);

@@ -12,9 +12,11 @@ OBJECTS = main.o interface.o
 ring: $(OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $(OBJECTS)
 
-main.o: main.c interface.h
+main.o: main.c interface.h 
 
-interface.o: interface.c interface.h 
+interface.o: interface.c interface.h node.h 
+
+node.o: node.c node.h 
 
 #checks.o: checks.c checks.h
 

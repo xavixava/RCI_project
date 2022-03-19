@@ -1,14 +1,24 @@
 //interface.c
 
 #include "interface.h"
+#include "node.h"
 //#include "checks.h"
 
 void interface(char **args)
 {
 	char buffer[128], *key, *address, *port, *info;
+	int chave;
+	Node *this;
 	memset(buffer, '\0', 128);
 	 
 	key = args[1];
+	chave = atoi(key);
+	if(chave<0|| chave>=MAX_NODES)
+	{
+		fprintf(stdout, "Chave inválida\n");
+		exit(1);
+	}
+	
 	address = handle_args(args[2], key);
 	port = handle_args(args[3], key);
 	
@@ -20,10 +30,13 @@ void interface(char **args)
 	
 	info = handle_instructions(buffer);
 	
-	if (strcmp(buffer, "new\n") == 0) 
+	if ((strcmp(buffer, "new\n") == 0)||(strcmp(buffer, "n\n") == 0)) 
 	{
 		fprintf(stdout, "Initiating a new ring\n");
-	} else if(strcmp(buffer, "pentry\n") == 0)
+		this = new(chave, address, port);
+		fprintf(stdout, "%d %s %s\n", getkey(this), getadd(this), getport(this));
+		
+	} else if(strcmp(buffer, "pentry") == 0)
 	{
 		fprintf(stdout, "pentry\n");
 	}else	fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
@@ -33,9 +46,9 @@ void interface(char **args)
 
 char *handle_args(char *arg, char *key)
 {
-	char *final, *aux;
+	char *final, *aux, *point=".";
 	
-	aux = strrchr(arg, '.');
+	aux = strstr(arg, point);
 	final = aux+1;
 	if(aux==NULL)
 	{
@@ -48,25 +61,28 @@ char *handle_args(char *arg, char *key)
 	//ADICIONAR VERIFICAÇÕES EXTRA, COMO VERIFICAR SE O ENDEREÇO E O PORTO SÃO NÚMEROS E OS SEUS TAMANHOS
 	
 	if(strcmp(arg, key)!=0)
-	{
-		fprintf(stdout, "Por favor, formate devidamente os argumentos\n");
+	{	
+		fprintf(stdout, "Por favor, use a mesma chave em todos os argumentos\n");
 		exit(1);
 	}
-	fprintf(stdout, "%s\n", final);
+	
 	return final;
 }
 
 char *handle_instructions(char *arg)
 {
-	char *final, *aux;
+	char *final, *aux, *space=" ";
 	
-	aux = strrchr(arg, ' ');
+	aux = strstr(arg, space);
 	
-	if(aux==NULL && strcmp(arg, "new\n")!=0)
-	{
-		fprintf(stdout, "Por favor, formate devidamente as instruções\n");
-		exit(1);
-	}	
+	
+	if(aux==NULL && strcmp(arg, "n\n")!=0)
+		if(strcmp(arg, "new\n")!=0)
+		{
+			fprintf(stdout, "%s", arg);
+			fprintf(stdout, "Por favor, formate devidamente as instruções\n");
+			exit(1);
+		}	
 	
 	if(aux!=NULL)
 	{
