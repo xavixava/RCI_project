@@ -2,13 +2,6 @@
 
 #include "node.h"
 
-struct _Node {
-	int chave
-	char *address;
-	char *port;
-	struct _Node *chord, *suc;
-};
-
 Node *new(int chave, char *address, char* port)
 {
 	Node *new;
@@ -22,8 +15,17 @@ Node *new(int chave, char *address, char* port)
 	return new;
 }
 
-int getkey(Node *n) return n->chave;
+int getkey(Node *n)
+{
+	return n->chave;
+}
 
-char *getadd(Node *n) return n->address;
+char *getadd(Node *n)
+{
+	return n->address;
+}
 
-char *getport(Node *n) return n->port;
+char *getport(Node *n)
+{
+	return n->port;
+}

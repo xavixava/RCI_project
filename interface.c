@@ -34,7 +34,7 @@ void interface(char **args)
 	{
 		fprintf(stdout, "Initiating a new ring\n");
 		this = new(chave, address, port);
-		fprintf(stdout, "%d %s %s\n", getkey(this), getadd(this), getport(this));
+		fprintf(stdout, "%d %s %s\n", this->chave, this->address, this->port);
 		
 	} else if(strcmp(buffer, "pentry") == 0)
 	{
