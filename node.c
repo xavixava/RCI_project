@@ -2,30 +2,22 @@
 
 #include "node.h"
 
-Node *new(int chave, char *address, char* port)
+Node *create(int chave, char *address, char* port)
 {
 	Node *new;
 	char *aux;
+	
 	new = (Node *) malloc(sizeof(Node));
-	aux=strcpy(new->port,port);
+	new->port = (char *) malloc(strlen(port)+1);
+	new->address = (char *) malloc(strlen(address)+1);
+	
 	new->chave=chave;
-	aux=strcpy(new->address,address); 
+	aux=strcpy(new->address,address);
+	if(aux==NULL)exit(1);
+	aux=strcpy(new->port,port);
+	if(aux==NULL)exit(1);
 	new->chord = NULL;
 	new->suc = NULL;
+	
 	return new;
-}
-
-int getkey(Node *n)
-{
-	return n->chave;
-}
-
-char *getadd(Node *n)
-{
-	return n->address;
-}
-
-char *getport(Node *n)
-{
-	return n->port;
 }

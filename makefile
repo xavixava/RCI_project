@@ -7,16 +7,18 @@ CFLAGS = -g -Wall
 SOURCES = main.c 
 
 #   Objects  ('make' automatically compiles .c to .o)
-OBJECTS = main.o interface.o node.o
+OBJECTS = main.o interface.o node.o network.o
 
 ring: $(OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $(OBJECTS)
 
 main.o: main.c interface.h 
 
-interface.o: interface.c interface.h node.h 
+interface.o: interface.c interface.h node.h network.h
 
 node.o: node.c node.h 
+
+network.o: network.c network.h
 
 #checks.o: checks.c checks.h
 

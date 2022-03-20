@@ -9,14 +9,8 @@ typedef struct _Node
 	char *address;
 	char *port;
 	struct _Node *chord, *suc;
-	}Node;
+}Node;
 
-Node *new(int chave, char *address, char* port);
-
-int getkey(Node *n);
-
-char *getadd(Node *n);
-
-char *getport(Node *n);
+Node *create(int chave, char *address, char* port);
 
 #endif

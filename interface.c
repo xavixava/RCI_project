@@ -2,6 +2,7 @@
 
 #include "interface.h"
 #include "node.h"
+#include "network.h"
 //#include "checks.h"
 
 void interface(char **args)
@@ -9,6 +10,7 @@ void interface(char **args)
 	char buffer[128], *key, *address, *port, *info;
 	int chave;
 	Node *this;
+	Server *fds;
 	memset(buffer, '\0', 128);
 	 
 	key = args[1];
@@ -22,6 +24,9 @@ void interface(char **args)
 	address = handle_args(args[2], key);
 	port = handle_args(args[3], key);
 	
+	this = create(chave, address, port);
+	fprintf(stdout, "%d %s %s\n", this->chave, this->address, this->port);
+	
 	if(fgets(buffer, 128, stdin)==NULL)
 	{
 		fprintf(stdout, "Nothing read\n");
@@ -33,8 +38,7 @@ void interface(char **args)
 	if ((strcmp(buffer, "new\n") == 0)||(strcmp(buffer, "n\n") == 0)) 
 	{
 		fprintf(stdout, "Initiating a new ring\n");
-		this = new(chave, address, port);
-		fprintf(stdout, "%d %s %s\n", this->chave, this->address, this->port);
+		fds = New(this->address, this->port);
 		
 	} else if(strcmp(buffer, "pentry") == 0)
 	{
