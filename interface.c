@@ -3,14 +3,24 @@
 #include "interface.h"
 #include "node.h"
 #include "network.h"
-//#include "checks.h"
+
+#define max(A,B) ((A)>=(B)?(A):(B))
 
 void interface(char **args)
 {
 	char buffer[128], *key, *address, *port, *info;
-	int chave;
+	int chave, newfd=0, maxfd, counter;
 	Node *this;
 	Server *fds;
+	struct sockaddr_in addr;
+	socklen_t addrlen;
+	ssize_t n;
+	fd_set rfds;
+	struct timeval tv;
+	
+	tv.tv_sec = 30;
+	tv.tv_usec = 0;
+	
 	memset(buffer, '\0', 128);
 	 
 	key = args[1];
@@ -44,6 +54,90 @@ void interface(char **args)
 	{
 		fprintf(stdout, "pentry\n");
 	}else	fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
+	
+	memset(buffer, '\0', 128);
+	addrlen=sizeof(addr);
+	
+	
+	
+	FD_ZERO(&rfds); 
+	while(1)
+	{
+		FD_SET(fds->TcpFd,&rfds);
+		FD_SET(fds->UdpFd,&rfds);
+		FD_SET(newfd,&rfds);
+		FD_SET(0,&rfds);
+		
+		maxfd = max(0, newfd);
+		maxfd = max(maxfd, fds->UdpFd);
+		maxfd = max(maxfd, fds->TcpFd);
+		counter = 0;
+		
+		counter = select(maxfd+1,&rfds, (fd_set*)NULL, (fd_set*)NULL, &tv);
+		
+		if(counter < 0)
+		{
+			fprintf(stdout, "error in select!\n");
+			exit(1);
+		}
+		else if (counter == 0){
+			fprintf(stdout, "Please write something\n");
+			tv.tv_sec = 30;
+		}
+				
+			if(FD_ISSET(fds->TcpFd,&rfds)){		//New tcp connection
+				FD_CLR(fds->TcpFd,&rfds);
+				
+				if((newfd=accept(fds->TcpFd,(struct sockaddr*)&addr,&addrlen))==-1)exit(1); //check if it will try to connect with more than one tcp socket at once
+				fprintf(stdout, "Accepted connection\n");
+				
+				FD_SET(newfd,&rfds);
+				
+				counter--;
+				memset(buffer, '\0', 128);
+			}if(newfd!=0) if(FD_ISSET(newfd,&rfds)){ //something written in accepted tcp socket
+				FD_CLR(newfd,&rfds);
+				
+				n = read(newfd, buffer, 127);
+				write(1, "received: ", 10);
+				
+				write(1, buffer, n);	
+				n = write(newfd, "busy\n", 5);
+				close(newfd);
+				newfd=0;
+				
+				counter--;
+				memset(buffer, '\0', 128);	
+			}if(FD_ISSET(0,&rfds)){ //received a command
+				FD_CLR(0,&rfds);
+				
+				if(fgets(buffer, 128, stdin)==NULL)
+				{
+					fprintf(stdout, "Nothing read\n");
+					exit(1);
+				}
+		
+				fprintf(stdout, "%s", buffer);
+				
+				if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))return;
+				
+				counter--;
+				memset(buffer, '\0', 128);
+			}if(FD_ISSET(fds->UdpFd,&rfds)){ //something written in udp socket
+				FD_CLR(fds->UdpFd,&rfds);
+				
+				n = recvfrom(fds->UdpFd, buffer, 128, 0, (struct sockaddr *)&addr, &addrlen);
+				write(1, "received: ", 10);
+				write(1, buffer, n);
+		
+				n = sendto(fds->UdpFd, buffer, n, 0, (struct sockaddr *)&addr, addrlen);
+				if(n==-1)exit(1);
+				
+				counter--;
+				memset(buffer, '\0', 128);
+			}
+		tv.tv_sec = 30;
+	}
 	
 	return;
 }
