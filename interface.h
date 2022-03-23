@@ -3,6 +3,7 @@
 
 /* Header file for the definition of the project interface */
 #include "geral.h"
+#include "node.h"
 
 
 #define MAX_NODES 32

@@ -16,8 +16,6 @@ Node *create(int chave, char *address, char* port)
 	if(aux==NULL)exit(1);
 	aux=strcpy(new->port,port);
 	if(aux==NULL)exit(1);
-	new->chord = NULL;
-	new->suc = NULL;
 	
 	return new;
 }

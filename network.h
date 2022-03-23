@@ -3,6 +3,7 @@
 
 /* Header file for the definition of the project  */
 #include "geral.h"
+#include "node.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -19,5 +20,6 @@ Server *New (char *address, char *port);
 
 int CreateTcpServer(char *port);
 int CreateUdpServer(char *port);
+void predEntry(Node *pred, Node *this);
 
 #endif

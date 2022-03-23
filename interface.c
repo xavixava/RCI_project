@@ -1,7 +1,6 @@
 //interface.c
 
 #include "interface.h"
-#include "node.h"
 #include "network.h"
 
 #define max(A,B) ((A)>=(B)?(A):(B))
@@ -9,8 +8,8 @@
 void interface(char **args)
 {
 	char buffer[128], *key, *address, *port, *info;
-	int chave, newfd=0, maxfd, counter;
-	Node *this;
+	int chave, newfd=0, maxfd = 0, counter, ring=0;
+	Node *this, *suc=NULL, *pred=NULL, *chord=NULL;
 	Server *fds;
 	struct sockaddr_in addr;
 	socklen_t addrlen;
@@ -21,11 +20,11 @@ void interface(char **args)
 	tv.tv_sec = 30;
 	tv.tv_usec = 0;
 	
-	memset(buffer, '\0', 128);
+	memset(buffer, '\0', 128); //clear buffer
 	 
 	key = args[1];
 	chave = atoi(key);
-	if(chave<0|| chave>=MAX_NODES)
+	if(chave<0|| chave>=MAX_NODES)  //check if the key is valid
 	{
 		fprintf(stdout, "Chave inválida\n");
 		exit(1);
@@ -34,64 +33,45 @@ void interface(char **args)
 	address = handle_args(args[2], key);
 	port = handle_args(args[3], key);
 	
-	this = create(chave, address, port);
-	fprintf(stdout, "%d %s %s\n", this->chave, this->address, this->port);
+	this = create(chave, address, port); //Saves Node info on Node struct
+	fprintf(stdout, "%d %s %s\n", this->chave, this->address, this->port);//DELETE LATER
 	
-	if(fgets(buffer, 128, stdin)==NULL)
-	{
-		fprintf(stdout, "Nothing read\n");
-		exit(1);
-	}
-	
-	info = handle_instructions(buffer);
-	
-	if ((strcmp(buffer, "new\n") == 0)||(strcmp(buffer, "n\n") == 0)) 
-	{
-		fprintf(stdout, "Initiating a new ring\n");
-		fds = New(this->address, this->port);
-		
-	} else if(strcmp(buffer, "pentry") == 0)
-	{
-		fprintf(stdout, "pentry\n");
-	}else	fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
-	
-	memset(buffer, '\0', 128);
 	addrlen=sizeof(addr);
 	
-	
-	
-	FD_ZERO(&rfds); 
+	FD_ZERO(&rfds); //clear garbage for select
 	while(1)
 	{
-		FD_SET(fds->TcpFd,&rfds);
-		FD_SET(fds->UdpFd,&rfds);
-		FD_SET(newfd,&rfds);
-		FD_SET(0,&rfds);
+		FD_SET(0,&rfds);	//select will wait for stdin
+		if(ring==1){  		//only if is already in ring
+		FD_SET(fds->TcpFd,&rfds);	//select will wait for tcp connection
+		FD_SET(fds->UdpFd,&rfds);	//select will wait for udp message
+		FD_SET(newfd,&rfds);	//select will wait for tcp message from current connection	
 		
-		maxfd = max(0, newfd);
+		maxfd = max(0, newfd);			//Check which is the max file descriptor so select won´t have to check all fds
 		maxfd = max(maxfd, fds->UdpFd);
 		maxfd = max(maxfd, fds->TcpFd);
+		}
 		counter = 0;
 		
-		counter = select(maxfd+1,&rfds, (fd_set*)NULL, (fd_set*)NULL, &tv);
+		counter = select(maxfd+1,&rfds, (fd_set*)NULL, (fd_set*)NULL, &tv);	
 		
-		if(counter < 0)
+		if(counter < 0)		//ERROR
 		{
 			fprintf(stdout, "error in select!\n");
 			exit(1);
 		}
 		else if (counter == 0){
-			fprintf(stdout, "Please write something\n");
+			fprintf(stdout, "Please write something\n");	//timeout ocurred
 			tv.tv_sec = 30;
 		}
 				
-			if(FD_ISSET(fds->TcpFd,&rfds)){		//New tcp connection
+			if(ring==1)if(FD_ISSET(fds->TcpFd,&rfds)){		//New tcp connection
 				FD_CLR(fds->TcpFd,&rfds);
 				
 				if((newfd=accept(fds->TcpFd,(struct sockaddr*)&addr,&addrlen))==-1)exit(1); //check if it will try to connect with more than one tcp socket at once
 				fprintf(stdout, "Accepted connection\n");
 				
-				FD_SET(newfd,&rfds);
+				FD_SET(newfd,&rfds);	//making sure select knows that now it will have to check for a new fd(newfd - tcp socket)
 				
 				counter--;
 				memset(buffer, '\0', 128);
@@ -103,7 +83,7 @@ void interface(char **args)
 				
 				write(1, buffer, n);	
 				n = write(newfd, "busy\n", 5);
-				close(newfd);
+				close(newfd); //closing newfd and tellinng select to not check it anymore
 				newfd=0;
 				
 				counter--;
@@ -111,19 +91,50 @@ void interface(char **args)
 			}if(FD_ISSET(0,&rfds)){ //received a command
 				FD_CLR(0,&rfds);
 				
-				if(fgets(buffer, 128, stdin)==NULL)
+				if(fgets(buffer, 128, stdin)==NULL)	//ERROR
 				{
 					fprintf(stdout, "Nothing read\n");
 					exit(1);
 				}
-		
-				fprintf(stdout, "%s", buffer);
 				
-				if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))return;
+				info = handle_instructions(buffer);
+				
+				if ((strcmp(buffer, "new\n") == 0)||(strcmp(buffer, "n\n") == 0)) 
+				{
+					fprintf(stdout, "Initiating a new ring\n");
+					pred = this;
+					suc = this;
+					fds = New(this->address, this->port);
+					ring = 1;
+				}else if((strcmp(buffer, "show\n") == 0)||(strcmp(buffer, "s\n") == 0))
+				{
+					fprintf(stdout, "This Node:\n-key = %d\n-address = %s\n-port = %s\n", this->chave, this->address, this->port);
+					fprintf(stdout, "Predecessor Node:\n-key = %d\n-address = %s\n-port = %s\n", pred->chave, pred->address, pred->port);
+					fprintf(stdout, "Successor Node:\n-key = %d\n-address = %s\n-port = %s\n", suc->chave, suc->address, suc->port);
+					
+					if(chord==NULL)fprintf(stdout, "No chord\n");
+					else fprintf(stdout, "Chord to:\n-key = %d\n-address = %s\n-port = %s\n", chord->chave, chord->address, chord->port);
+				} else if((strcmp(buffer, "pentry") == 0)||(strcmp(buffer, "p") == 0))
+				{
+					key = info;
+					address = handle_instructions(info);
+					port = handle_instructions(address);
+		
+					pred = create(atoi(key), address, port);
+					fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
+		
+					predEntry(pred, this);
+		
+					fds = New(this->address, this->port);
+					ring = 1;
+				}else if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))return;
+				else	fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
+				
+				fprintf(stdout, "%s", buffer);
 				
 				counter--;
 				memset(buffer, '\0', 128);
-			}if(FD_ISSET(fds->UdpFd,&rfds)){ //something written in udp socket
+			}if(ring==1)if(FD_ISSET(fds->UdpFd,&rfds)){ //something written in udp socket
 				FD_CLR(fds->UdpFd,&rfds);
 				
 				n = recvfrom(fds->UdpFd, buffer, 128, 0, (struct sockaddr *)&addr, &addrlen);
@@ -174,8 +185,7 @@ char *handle_instructions(char *arg)
 	aux = strstr(arg, space);
 	
 	
-	if(aux==NULL && strcmp(arg, "n\n")!=0)
-		if(strcmp(arg, "new\n")!=0)
+	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0)
 		{
 			fprintf(stdout, "%s", arg);
 			fprintf(stdout, "Por favor, formate devidamente as instruções\n");
