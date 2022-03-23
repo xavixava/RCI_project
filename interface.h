@@ -11,5 +11,6 @@
 void interface(char **args);
 char *handle_args(char *arg, char *key);
 char *handle_instructions(char *arg);
+char *newline(char *arg);
 
 #endif

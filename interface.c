@@ -81,8 +81,24 @@ void interface(char **args)
 				n = read(newfd, buffer, 127);
 				write(1, "received: ", 10);
 				
+				
 				write(1, buffer, n);	
 				n = write(newfd, "busy\n", 5);
+				
+				info = handle_instructions(buffer);				
+				if(strcmp("SELF", buffer)==0)//falta enviar a mensagem PRED
+				{
+					key = info;
+					address = handle_instructions(info);
+					address = handle_args(address, key);
+					port = handle_instructions(address);
+					port = handle_args(port, key);
+					port = newline(port);
+					pred = create(atoi(key), address, port);
+					
+				//	fprintf(stdout, "%s %d %s %s\n", buffer, pred->chave, pred->address, pred->port);
+				}
+				
 				close(newfd); //closing newfd and tellinng select to not check it anymore
 				newfd=0;
 				
@@ -109,8 +125,8 @@ void interface(char **args)
 				}else if((strcmp(buffer, "show\n") == 0)||(strcmp(buffer, "s\n") == 0))
 				{
 					fprintf(stdout, "This Node:\n-key = %d\n-address = %s\n-port = %s\n", this->chave, this->address, this->port);
-					fprintf(stdout, "Predecessor Node:\n-key = %d\n-address = %s\n-port = %s\n", pred->chave, pred->address, pred->port);
-					fprintf(stdout, "Successor Node:\n-key = %d\n-address = %s\n-port = %s\n", suc->chave, suc->address, suc->port);
+					if(pred!=NULL)fprintf(stdout, "Predecessor Node:\n-key = %d\n-address = %s\n-port = %s\n", pred->chave, pred->address, pred->port);
+					if(pred!=NULL)fprintf(stdout, "Successor Node:\n-key = %d\n-address = %s\n-port = %s\n", suc->chave, suc->address, suc->port);
 					
 					if(chord==NULL)fprintf(stdout, "No chord\n");
 					else fprintf(stdout, "Chord to:\n-key = %d\n-address = %s\n-port = %s\n", chord->chave, chord->address, chord->port);
@@ -118,8 +134,10 @@ void interface(char **args)
 				{
 					key = info;
 					address = handle_instructions(info);
+					address = handle_args(address, key);
 					port = handle_instructions(address);
-		
+					port = handle_args(port, key);
+					port = newline(port);
 					pred = create(atoi(key), address, port);
 					fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
 		
@@ -140,8 +158,8 @@ void interface(char **args)
 				n = recvfrom(fds->UdpFd, buffer, 128, 0, (struct sockaddr *)&addr, &addrlen);
 				write(1, "received: ", 10);
 				write(1, buffer, n);
-		
-				n = sendto(fds->UdpFd, buffer, n, 0, (struct sockaddr *)&addr, addrlen);
+				
+				n = sendto(fds->UdpFd, "ACK", 3, 0, (struct sockaddr *)&addr, addrlen);
 				if(n==-1)exit(1);
 				
 				counter--;
@@ -199,4 +217,13 @@ char *handle_instructions(char *arg)
 	}
 	
 	return final;
+}
+
+
+char *newline(char *arg)
+{
+	char *aux;
+	aux = strchr(arg, '\n');
+	if(aux!=NULL) *aux = '\0';
+	return arg;
 }
