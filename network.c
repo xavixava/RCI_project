@@ -61,19 +61,18 @@ int CreateUdpServer(char *port)
 	return fd;
 }
 
-void predEntry(Node *pred, Node *this)
+void selfInform(Node *pred, Node *this)
 {
 	int fd, errcode;
 	ssize_t n;
 	struct addrinfo hints, *res;
-	char buffer[4], message[64];
+	char message[64];
 	
-	buffer[4]='\0';
 	memset(message, '\0', sizeof(message));
 	
 	sprintf(message, "SELF %d %d.%s %d.%s\n", this->chave, this->chave, this->address, this->chave, this-> port);
 	
-	fprintf(stdout, "%s", message);
+	fprintf(stdout, "sending: %s", message);
 	
 	fd=socket(AF_INET,SOCK_STREAM, 0);//TCP socket
 	if(fd==-1)	exit(1);
@@ -82,34 +81,59 @@ void predEntry(Node *pred, Node *this)
 	hints.ai_family = AF_INET;//IPv4
 	hints.ai_socktype = SOCK_STREAM;//TCP socket
 	
-	fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
-
 	errcode = getaddrinfo(pred->address, pred->port, &hints, &res);
 	if (errcode!=0)exit(1);
 	
-	fprintf(stdout, "connecting\n");
-	
 	n = connect(fd, res->ai_addr, res->ai_addrlen);
 	if(n==-1) exit(1);
-	
-	fprintf(stdout, "connected\n");
 	
 	n = write(fd, message, strlen(message));
 	if(n==-1)exit(1);
 	
 	fprintf(stdout, "sent\n");
-	
-	n = read(fd, buffer, 128);
-	if(n==-1)exit(1);
-	write(1, "echo: ", 6);
-	write(1, buffer, n);
-	
+		
 	freeaddrinfo(res);
 	close(fd);
 
 	return;
 }
 
+void predInform(Node *suc, Node *old_suc)
+{
+	int fd, errcode;
+	ssize_t n;
+	struct addrinfo hints, *res;
+	char message[64];
+	
+	memset(message, '\0', sizeof(message));
+	
+	sprintf(message, "PRED %d %d.%s %d.%s\n", suc->chave, suc->chave, suc->address, suc->chave, suc-> port);
+	
+	fprintf(stdout, "sending: %s", message);
+	
+	fd=socket(AF_INET,SOCK_STREAM, 0);//TCP socket
+	if(fd==-1)	exit(1);
+	
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_INET;//IPv4
+	hints.ai_socktype = SOCK_STREAM;//TCP socket
+	
+	errcode = getaddrinfo(old_suc->address, old_suc->port, &hints, &res);
+	if (errcode!=0)exit(1);
+	
+	n = connect(fd, res->ai_addr, res->ai_addrlen);
+	if(n==-1) exit(1);
+	
+	n = write(fd, message, strlen(message));
+	if(n==-1)exit(1);
+	
+	fprintf(stdout, "sent\n");
+	
+	freeaddrinfo(res);
+	close(fd);
+
+	return;
+}
 
 	/*Connect by udp
 	

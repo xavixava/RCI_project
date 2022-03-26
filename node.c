@@ -8,7 +8,7 @@ Node *create(int chave, char *address, char* port)
 	char *aux;
 	
 	new = (Node *) malloc(sizeof(Node));
-	new->port = (char *) malloc(strlen(port)+1);
+	new->port = (char *) malloc(6);
 	new->address = (char *) malloc(strlen(address)+1);
 	
 	new->chave=chave;
@@ -18,4 +18,12 @@ Node *create(int chave, char *address, char* port)
 	if(aux==NULL)exit(1);
 	
 	return new;
+}
+
+void freeNode(Node *this)
+{
+	free(this->address);
+	free(this->port);
+	free(this);
+	return;
 }

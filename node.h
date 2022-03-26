@@ -11,5 +11,6 @@ typedef struct _Node
 }Node;
 
 Node *create(int chave, char *address, char* port);
+void freeNode(Node *this);
 
 #endif

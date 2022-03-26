@@ -20,6 +20,7 @@ Server *New (char *address, char *port);
 
 int CreateTcpServer(char *port);
 int CreateUdpServer(char *port);
-void predEntry(Node *pred, Node *this);
+void selfInform(Node *pred, Node *this);
+void predInform(Node *suc, Node *old_suc);
 
 #endif

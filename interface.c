@@ -9,7 +9,7 @@ void interface(char **args)
 {
 	char buffer[128], *key, *address, *port, *info;
 	int chave, newfd=0, maxfd = 0, counter, ring=0;
-	Node *this, *suc=NULL, *pred=NULL, *chord=NULL;
+	Node *this, *suc=NULL, *pred=NULL, *chord=NULL, *aux=NULL;
 	Server *fds;
 	struct sockaddr_in addr;
 	socklen_t addrlen;
@@ -79,14 +79,11 @@ void interface(char **args)
 				FD_CLR(newfd,&rfds);
 				
 				n = read(newfd, buffer, 127);
-				write(1, "received: ", 10);
+				fprintf(stdout, "received: %s\n", buffer);
 				
-				
-				write(1, buffer, n);	
-				n = write(newfd, "busy\n", 5);
 				
 				info = handle_instructions(buffer);				
-				if(strcmp("SELF", buffer)==0)//falta enviar a mensagem PRED
+				if(strcmp("SELF", buffer)==0) //received SELF message 
 				{
 					key = info;
 					address = handle_instructions(info);
@@ -94,17 +91,58 @@ void interface(char **args)
 					port = handle_instructions(address);
 					port = handle_args(port, key);
 					port = newline(port);
-					pred = create(atoi(key), address, port);
 					
-				//	fprintf(stdout, "%s %d %s %s\n", buffer, pred->chave, pred->address, pred->port);
+					fprintf(stdout, "suc: %d %s %s\n", atoi(key), address, port);
+					aux = suc;
+					suc = create(atoi(key), address, port);
+					
+					if(pred == this){
+						selfInform(suc, this);
+						pred = suc;
+					}
+					else if(aux!=NULL)
+					{
+						predInform(suc, aux);
+						if (aux!=pred)freeNode(aux);
+					}
+
+					fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
+					fprintf(stdout, "suc: %d %s %s\n", suc->chave, suc->address, suc->port);
+					
+				aux=NULL;
+				}
+				else if(strcmp("PRED", buffer)==0) //received PRED message
+				{
+					key = info; //transform this into a function later
+					address = handle_instructions(info);
+					address = handle_args(address, key);
+					port = handle_instructions(address);
+					port = handle_args(port, key);
+					port = newline(port);
+					
+					fprintf(stdout, " %d %s %s\n", atoi(key), address, port);
+					
+					if(pred==suc||pred==NULL)pred = create(atoi(key), address, port);
+					else
+					{
+						pred->chave = atoi(key);
+						strcpy(pred->address, address);
+						strcpy(pred->port, port);
+					}
+					
+					fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
+					
+					selfInform(pred, this);
 				}
 				
-				close(newfd); //closing newfd and tellinng select to not check it anymore
+				
+				close(newfd); //closing newfd and telling select to not check it anymore
 				newfd=0;
 				
 				counter--;
 				memset(buffer, '\0', 128);	
-			}if(FD_ISSET(0,&rfds)){ //received a command
+			}
+			if(FD_ISSET(0,&rfds)){ //received a command
 				FD_CLR(0,&rfds);
 				
 				if(fgets(buffer, 128, stdin)==NULL)	//ERROR
@@ -122,15 +160,17 @@ void interface(char **args)
 					suc = this;
 					fds = New(this->address, this->port);
 					ring = 1;
-				}else if((strcmp(buffer, "show\n") == 0)||(strcmp(buffer, "s\n") == 0))
+				}
+				else if((strcmp(buffer, "show\n") == 0)||(strcmp(buffer, "s\n") == 0))
 				{
 					fprintf(stdout, "This Node:\n-key = %d\n-address = %s\n-port = %s\n", this->chave, this->address, this->port);
 					if(pred!=NULL)fprintf(stdout, "Predecessor Node:\n-key = %d\n-address = %s\n-port = %s\n", pred->chave, pred->address, pred->port);
-					if(pred!=NULL)fprintf(stdout, "Successor Node:\n-key = %d\n-address = %s\n-port = %s\n", suc->chave, suc->address, suc->port);
+					if(suc!=NULL)fprintf(stdout, "Successor Node:\n-key = %d\n-address = %s\n-port = %s\n", suc->chave, suc->address, suc->port);
 					
 					if(chord==NULL)fprintf(stdout, "No chord\n");
 					else fprintf(stdout, "Chord to:\n-key = %d\n-address = %s\n-port = %s\n", chord->chave, chord->address, chord->port);
-				} else if((strcmp(buffer, "pentry") == 0)||(strcmp(buffer, "p") == 0))
+				}
+				else if((strcmp(buffer, "pentry") == 0)||(strcmp(buffer, "p") == 0))
 				{
 					key = info;
 					address = handle_instructions(info);
@@ -138,21 +178,22 @@ void interface(char **args)
 					port = handle_instructions(address);
 					port = handle_args(port, key);
 					port = newline(port);
-					pred = create(atoi(key), address, port);
+					
+					if(pred==NULL)pred = create(atoi(key), address, port);
+					
 					fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
 		
-					predEntry(pred, this);
+					selfInform(pred, this);
 		
 					fds = New(this->address, this->port);
 					ring = 1;
 				}else if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))return;
 				else	fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
 				
-				fprintf(stdout, "%s", buffer);
-				
 				counter--;
 				memset(buffer, '\0', 128);
-			}if(ring==1)if(FD_ISSET(fds->UdpFd,&rfds)){ //something written in udp socket
+			}
+			if(ring==1)if(FD_ISSET(fds->UdpFd,&rfds)){ //something written in udp socket
 				FD_CLR(fds->UdpFd,&rfds);
 				
 				n = recvfrom(fds->UdpFd, buffer, 128, 0, (struct sockaddr *)&addr, &addrlen);
