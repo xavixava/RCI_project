@@ -13,4 +13,7 @@ char *handle_args(char *arg, char *key);
 char *handle_instructions(char *arg);
 char *newline(char *arg);
 
+int compareDist(Node *this, Node *a, Node *b, int flag);
+unsigned int dist(Node *this, Node *measuree);
+
 #endif

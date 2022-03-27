@@ -2,6 +2,8 @@
 #include "network.h"
 #include "geral.h"
 
+extern int errno;
+
 Server *New (char *address, char *port)
 {
 	Server *new;
@@ -12,6 +14,13 @@ Server *New (char *address, char *port)
 	new -> UdpFd = CreateUdpServer(port);
 
 	return new;
+}
+
+Server *close_sockets (Server *closee)
+{
+	close(closee->TcpFd);
+	close(closee->UdpFd);
+	return closee;
 }
 
 int CreateTcpServer(char *port)
@@ -73,6 +82,7 @@ void selfInform(Node *pred, Node *this)
 	sprintf(message, "SELF %d %d.%s %d.%s\n", this->chave, this->chave, this->address, this->chave, this-> port);
 	
 	fprintf(stdout, "sending: %s", message);
+	fprintf(stdout, "to: %d %s %s\n", pred->chave, pred->address, pred->port);
 	
 	fd=socket(AF_INET,SOCK_STREAM, 0);//TCP socket
 	if(fd==-1)	exit(1);
@@ -84,8 +94,12 @@ void selfInform(Node *pred, Node *this)
 	errcode = getaddrinfo(pred->address, pred->port, &hints, &res);
 	if (errcode!=0)exit(1);
 	
+	
 	n = connect(fd, res->ai_addr, res->ai_addrlen);
-	if(n==-1) exit(1);
+	if(n==-1)
+	{
+		fprintf(stderr, "%s\n", strerror(errno));
+	};
 	
 	n = write(fd, message, strlen(message));
 	if(n==-1)exit(1);

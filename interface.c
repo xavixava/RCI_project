@@ -75,7 +75,8 @@ void interface(char **args)
 				
 				counter--;
 				memset(buffer, '\0', 128);
-			}if(newfd!=0) if(FD_ISSET(newfd,&rfds)){ //something written in accepted tcp socket
+			}
+			if(newfd!=0) if(FD_ISSET(newfd,&rfds)){ //something written in accepted tcp socket
 				FD_CLR(newfd,&rfds);
 				
 				n = read(newfd, buffer, 127);
@@ -102,7 +103,7 @@ void interface(char **args)
 					}
 					else if(aux!=NULL)
 					{
-						predInform(suc, aux);
+						if(compareDist(this, aux, suc, 0)==1)predInform(suc, aux);
 						if (aux!=pred)freeNode(aux);
 					}
 
@@ -132,7 +133,8 @@ void interface(char **args)
 					
 					fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
 					
-					selfInform(pred, this);
+					if(pred->chave!=this->chave)selfInform(pred, this);
+					else suc=pred;
 				}
 				
 				
@@ -187,7 +189,30 @@ void interface(char **args)
 		
 					fds = New(this->address, this->port);
 					ring = 1;
-				}else if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))return;
+				}
+				else if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))
+				{
+					if(ring!=1)fprintf(stdout, "Not in ring\n");
+					else
+					{
+						if(pred!=this && suc!=this)
+						{
+							predInform(pred, suc);
+							freeNode(pred);
+							if(pred!=suc)freeNode(suc);
+						}
+						pred = NULL;
+						suc =NULL;
+						fds = close_sockets(fds);
+						if(newfd!=0)close(newfd);
+						ring=0;
+					}
+				}
+				else if ((strcmp(buffer, "exit\n") == 0)||(strcmp(buffer, "e\n") == 0))
+				{
+					freeNode(this);
+					return;
+				}
 				else	fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
 				
 				counter--;
@@ -244,7 +269,7 @@ char *handle_instructions(char *arg)
 	aux = strstr(arg, space);
 	
 	
-	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0)
+	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0 && strcmp(arg, "exit\n")!=0 && strcmp(arg, "e\n")!=0)
 		{
 			fprintf(stdout, "%s", arg);
 			fprintf(stdout, "Por favor, formate devidamente as instruções\n");
@@ -260,11 +285,45 @@ char *handle_instructions(char *arg)
 	return final;
 }
 
-
 char *newline(char *arg)
 {
 	char *aux;
 	aux = strchr(arg, '\n');
 	if(aux!=NULL) *aux = '\0';
 	return arg;
+}
+
+/*
+*	Compares distances of node a and b to this
+*	Return value: 0 if dist(a, this)==dist(b, this)
+*				  1 if dist(a, this)>dist(b, this)
+*				 -1 if dist(a, this)<dist(b, this)
+*	Extra info: if flag==0 no chords are considered, if flag==1consider chord				
+*/
+int compareDist(Node *this, Node *a, Node *b, int flag)
+{
+	int dista, distb;
+	
+	dista = dist(this, a);
+	distb = dist(this, b);
+	
+	if(dista==distb)return 0;
+	else if(max(dista, distb)==dista)return 1;
+	else if(max(dista, distb)==distb)return -1;
+	else return -2;
+}
+
+unsigned int dist(Node *this, Node *measuree)
+{
+	int dist=0;
+	if (this->chave==measuree->chave)return 0;
+	else if (this->chave>measuree->chave){
+		dist = MAX_NODES+1-(this->chave);
+		dist = dist + (measuree->chave);
+	}
+	else
+	{
+		dist = (measuree->chave)-(this->chave);
+	}
+	return dist;
 }

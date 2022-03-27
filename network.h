@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <errno.h>
 
 typedef struct _server
 {	
@@ -17,9 +18,11 @@ typedef struct _server
 }Server;
 
 Server *New (char *address, char *port);
+Server *close_sockets (Server *closee);
 
 int CreateTcpServer(char *port);
 int CreateUdpServer(char *port);
+
 void selfInform(Node *pred, Node *this);
 void predInform(Node *suc, Node *old_suc);
 
