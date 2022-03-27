@@ -134,7 +134,11 @@ void interface(char **args)
 					fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
 					
 					if(pred->chave!=this->chave)selfInform(pred, this);
-					else suc=pred;
+					else 
+					{
+						if(suc!=pred)freeNode(suc);
+						suc=pred;
+					}
 				}
 				
 				

@@ -20,7 +20,8 @@ Server *close_sockets (Server *closee)
 {
 	close(closee->TcpFd);
 	close(closee->UdpFd);
-	return closee;
+	free(closee);
+	return NULL;
 }
 
 int CreateTcpServer(char *port)
