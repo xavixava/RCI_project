@@ -217,6 +217,7 @@ void interface(char **args)
 					freeNode(this);
 					return;
 				}
+				else if(strcmp(buffer, "clear\n")==0) system("clear");
 				else	fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
 				
 				counter--;
@@ -273,7 +274,7 @@ char *handle_instructions(char *arg)
 	aux = strstr(arg, space);
 	
 	
-	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0 && strcmp(arg, "exit\n")!=0 && strcmp(arg, "e\n")!=0)
+	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0 && strcmp(arg, "exit\n")!=0 && strcmp(arg, "e\n")!=0 && strcmp(arg, "clear\n")!=0)
 		{
 			fprintf(stdout, "%s", arg);
 			fprintf(stdout, "Por favor, formate devidamente as instruções\n");
