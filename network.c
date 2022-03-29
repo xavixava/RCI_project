@@ -40,9 +40,17 @@ int CreateTcpServer(char *port)
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	
 	n = bind(fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
-	if(n==-1)exit(1);
+	if(n==-1)
+	{
+		fprintf(stderr, "%s\n", strerror(errno));
+		exit(1);
+	};
 
-	if(listen(fd, 5)==-1)exit(1);
+	if(listen(fd, 5)==-1)
+	{
+		fprintf(stderr, "%s\n", strerror(errno));
+		exit(1);
+	};
 	fprintf(stdout, "listening\n");
 	
 	return fd;
@@ -64,7 +72,11 @@ int CreateUdpServer(char *port)
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	
 	n = bind(fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
-	if(n==-1)exit(1);
+	if(n==-1)
+	{
+		fprintf(stderr, "%s\n", strerror(errno));
+		exit(1);
+	};
 	
 	fprintf(stdout, "udp socket binded\n");
 	
@@ -93,13 +105,17 @@ void selfInform(Node *pred, Node *this)
 	hints.ai_socktype = SOCK_STREAM;//TCP socket
 	
 	errcode = getaddrinfo(pred->address, pred->port, &hints, &res);
-	if (errcode!=0)exit(1);
-	
+	if (errcode!=0)
+	{
+		fprintf(stderr, "%s\n", gai_strerror(errcode));
+		exit(1);
+	};
 	
 	n = connect(fd, res->ai_addr, res->ai_addrlen);
 	if(n==-1)
 	{
 		fprintf(stderr, "%s\n", strerror(errno));
+		exit(1);
 	};
 	
 	n = write(fd, message, strlen(message));
@@ -134,10 +150,18 @@ void predInform(Node *suc, Node *old_suc)
 	hints.ai_socktype = SOCK_STREAM;//TCP socket
 	
 	errcode = getaddrinfo(old_suc->address, old_suc->port, &hints, &res);
-	if (errcode!=0)exit(1);
+	if (errcode!=0)	
+	{
+		fprintf(stderr, "%s\n", gai_strerror(errcode));
+		exit(1);
+	};
 	
 	n = connect(fd, res->ai_addr, res->ai_addrlen);
-	if(n==-1) exit(1);
+	if(n==-1) 
+	{
+		fprintf(stderr, "%s\n", strerror(errno));
+		exit(1);
+	};
 	
 	n = write(fd, message, strlen(message));
 	if(n==-1)exit(1);

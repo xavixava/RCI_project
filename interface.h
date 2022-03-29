@@ -13,6 +13,11 @@ char *handle_args(char *arg, char *key);
 char *handle_instructions(char *arg);
 char *newline(char *arg);
 
+void SelfRcv(Node *this, Node **suc, Node **pred, char *info);
+void PREDrcv(Node *this, Node **suc, Node **pred, char *info);
+void RingLeave(Node *this, Node **suc, Node **pred);
+
+
 int compareDist(Node *this, Node *a, Node *b, int flag);
 unsigned int dist(Node *this, Node *measuree);
 

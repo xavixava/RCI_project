@@ -1,15 +1,23 @@
 //interface.c
 
+/*
+*Notas: se encontrarmos perdas de memória, podemos só alocar o espaço para os nós no ínicio e depois ir atualizando valores
+*/
+
+
+
 #include "interface.h"
 #include "network.h"
 
 #define max(A,B) ((A)>=(B)?(A):(B))
 
+//extern Node *this=NULL, *suc=NULL, *pred=NULL, *chord=NULL; //descobrir o porquê do warning, ficaria mais fácil assim
+
 void interface(char **args)
 {
 	char buffer[128], *key, *address, *port, *info;
 	int chave, newfd=0, maxfd = 0, counter, ring=0;
-	Node *this, *suc=NULL, *pred=NULL, *chord=NULL, *aux=NULL;
+	Node *this, *suc=NULL, *pred=NULL, *chord=NULL;
 	Server *fds;
 	struct sockaddr_in addr;
 	socklen_t addrlen;
@@ -19,7 +27,7 @@ void interface(char **args)
 	
 	tv.tv_sec = 30;
 	tv.tv_usec = 0;
-	
+		
 	memset(buffer, '\0', 128); //clear buffer
 	 
 	key = args[1];
@@ -32,6 +40,8 @@ void interface(char **args)
 	
 	address = handle_args(args[2], key);
 	port = handle_args(args[3], key);
+	
+	fprintf(stdout, "%d %d.%s %d.%s\n", chave, chave, address, chave, port);
 	
 	this = create(chave, address, port); //Saves Node info on Node struct
 	fprintf(stdout, "%d %s %s\n", this->chave, this->address, this->port);//DELETE LATER
@@ -86,59 +96,18 @@ void interface(char **args)
 				info = handle_instructions(buffer);				
 				if(strcmp("SELF", buffer)==0) //received SELF message 
 				{
-					key = info;
-					address = handle_instructions(info);
-					address = handle_args(address, key);
-					port = handle_instructions(address);
-					port = handle_args(port, key);
-					port = newline(port);
-					
-					fprintf(stdout, "suc: %d %s %s\n", atoi(key), address, port);
-					aux = suc;
-					suc = create(atoi(key), address, port);
-					
-					if(pred == this){
-						selfInform(suc, this);
-						pred = suc;
-					}
-					else if(aux!=NULL)
-					{
-						if(compareDist(this, aux, suc, 0)==1)predInform(suc, aux);
-						if (aux!=pred)freeNode(aux);
-					}
+					SelfRcv(this, &suc, &pred, info);
 
 					fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
 					fprintf(stdout, "suc: %d %s %s\n", suc->chave, suc->address, suc->port);
 					
-				aux=NULL;
 				}
 				else if(strcmp("PRED", buffer)==0) //received PRED message
-				{
-					key = info; //transform this into a function later
-					address = handle_instructions(info);
-					address = handle_args(address, key);
-					port = handle_instructions(address);
-					port = handle_args(port, key);
-					port = newline(port);
-					
-					fprintf(stdout, " %d %s %s\n", atoi(key), address, port);
-					
-					if(pred==suc||pred==NULL)pred = create(atoi(key), address, port);
-					else
-					{
-						pred->chave = atoi(key);
-						strcpy(pred->address, address);
-						strcpy(pred->port, port);
-					}
+				{				
+					PREDrcv(this, &suc, &pred, info);
 					
 					fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
-					
-					if(pred->chave!=this->chave)selfInform(pred, this);
-					else 
-					{
-						if(suc!=pred)freeNode(suc);
-						suc=pred;
-					}
+					fprintf(stdout, "suc: %d %s %s\n", suc->chave, suc->address, suc->port);
 				}
 				
 				
@@ -199,16 +168,9 @@ void interface(char **args)
 					if(ring!=1)fprintf(stdout, "Not in ring\n");
 					else
 					{
-						if(pred!=this && suc!=this)
-						{
-							predInform(pred, suc);
-							freeNode(pred);
-							if(pred!=suc)freeNode(suc);
-						}
-						pred = NULL;
-						suc =NULL;
-						fds = close_sockets(fds);
+						RingLeave(this, &suc, &pred);
 						if(newfd!=0)close(newfd);
+						fds = close_sockets(fds);
 						ring=0;
 					}
 				}
@@ -296,6 +258,83 @@ char *newline(char *arg)
 	aux = strchr(arg, '\n');
 	if(aux!=NULL) *aux = '\0';
 	return arg;
+}
+
+void PREDrcv(Node *this, Node **suc, Node **pred, char *info)
+{
+	char *address, *port, *key;
+	
+	key = info; //transform this into a function later
+	address = handle_instructions(info);
+	address = handle_args(address, key);
+	port = handle_instructions(address);
+	port = handle_args(port, key);
+	port = newline(port);
+					
+	fprintf(stdout, "pred: %d %s %s\n", atoi(key), address, port);
+					
+	if(*pred==*suc||*pred==NULL)*pred = create(atoi(key), address, port);
+	else
+	{
+		(*pred)->chave = atoi(key);
+		strcpy((*pred)->address, address);
+		strcpy((*pred)->port, port);
+	}
+					
+	fprintf(stdout, "pred: %d %s %s\n", (*pred)->chave, (*pred)->address, (*pred)->port);
+		
+	if((*pred)->chave!=this->chave)selfInform(*pred, this);
+	else 
+	{
+		if(*suc!=*pred)freeNode(*suc);
+		*suc=*pred;
+	}
+	return;
+}
+
+void SelfRcv(Node *this, Node **suc, Node **pred, char *info)
+{
+	Node *aux;
+	char *address, *port, *key;
+	
+	key = info;
+	address = handle_instructions(info);
+	address = handle_args(address, key);
+	port = handle_instructions(address);
+	port = handle_args(port, key);
+	port = newline(port);
+	
+	fprintf(stdout, "suc: %d %s %s\n", atoi(key), address, port);
+	aux = *suc;
+	*suc = create(atoi(key), address, port);
+	
+	if((*pred)->chave == this->chave){
+		if(*pred!=this){
+		freeNode(*pred);
+		}
+		//sleep(1); //enable while using valgrind
+		selfInform(*suc, this);
+		*pred = *suc;
+	}
+	else if(aux!=NULL)
+	{
+		if(compareDist(this, aux, *suc, 0)==1)predInform(*suc, aux);
+		if (aux!=*pred)freeNode(aux);
+	}
+	return;
+}
+
+void RingLeave(Node *this, Node **suc, Node **pred)
+{
+	if(*pred!=this && *suc!=this)
+	{
+		predInform(*pred, *suc);
+		freeNode(*pred);
+		if(*pred!=*suc)freeNode(*suc);
+	}
+	*pred = NULL;
+	*suc =NULL;
+	return;
 }
 
 /*
