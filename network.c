@@ -12,7 +12,7 @@
 
 int CreateTcpServer(char *port)
 {
-	int fd;
+	int fd, enable=1;
 	unsigned int porto = atoi(port);
 	ssize_t n;
 	struct sockaddr_in server_addr;
@@ -25,16 +25,22 @@ int CreateTcpServer(char *port)
 	server_addr.sin_port = htons(porto);
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) ==-1)
+	{
+		fprintf(stderr, "Reuse:%s\n", strerror(errno));
+		exit(1);
+	};
+	
 	n = bind(fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
 	if(n==-1)
 	{
-		fprintf(stderr, "%s\n", strerror(errno));
+		fprintf(stderr, "Tcp bind:%s\n", strerror(errno));
 		exit(1);
-	};
+	}
 
 	if(listen(fd, 5)==-1)
 	{
-		fprintf(stderr, "%s\n", strerror(errno));
+		fprintf(stderr, "tcp listen: %s\n", strerror(errno));
 		exit(1);
 	};
 	fprintf(stdout, "listening\n");
@@ -89,7 +95,7 @@ int selfInform(Node *pred, Node *this)
 		fd=socket(AF_INET,SOCK_STREAM, 0);//TCP socket
 		if(fd==-1) 
 		{
-			fprintf(stderr, "%s\n", strerror(errno));
+			fprintf(stderr, "Socket: %s\n", strerror(errno));
 			exit(1);
 		}
 	
@@ -100,14 +106,14 @@ int selfInform(Node *pred, Node *this)
 		errcode = getaddrinfo(pred->address, pred->port, &hints, &res);
 		if (errcode!=0)
 		{
-			fprintf(stderr, "%s\n", gai_strerror(errcode));
+			fprintf(stderr, "Addrinfo: %s\n", gai_strerror(errcode));
 			exit(1);
 		};
 	
 		n = connect(fd, res->ai_addr, res->ai_addrlen);
 		if(n==-1)
 		{
-			fprintf(stderr, "%s\n", strerror(errno));
+			fprintf(stderr, "Connect: %s\n", strerror(errno));
 			exit(1);
 		}
 		freeaddrinfo(res);

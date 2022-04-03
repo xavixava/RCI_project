@@ -56,7 +56,7 @@ void interface(char **args)
 		FD_SET(UdpFd,&rfds);	//select will wait for udp message
 		FD_SET(newfd,&rfds);	//select will wait for tcp message from current connection	
 		
-		//fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd);
+		fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd);
 
 		maxfd = max(0, newfd);			//Check which is the max file descriptor so select won´t have to check all fds
 		maxfd = max(maxfd, UdpFd);
@@ -433,6 +433,7 @@ void PREDrcv(Node *this, Node *suc, Node *pred, char *info) //cria um fd diferen
 	}
 	
 	update(pred, chave, address, port, 0);
+	if(pred->chave==suc->chave)pred->fd = suc->fd;
 					
 	fprintf(stdout, "pred: %d %s %s %d\n", pred->chave, pred->address, pred->port, pred->fd);
 		
@@ -445,7 +446,7 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 {
 	Node *aux;
 	char *address, *port, *key;
-	int chave, int fd;
+	int chave;
 	int n=0;
 	
 	aux = create(-1, NULL, NULL);
