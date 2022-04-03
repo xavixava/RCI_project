@@ -227,7 +227,11 @@ void GenericTCPsend(Node *suc, char *message)
 		freeaddrinfo(res);
 	}
 	n = write(fd, message, strlen(message));
-	if(n==-1)exit(1);
+	if(n==-1)
+	{
+		fprintf(stderr, "%s\n", strerror(errno));
+		exit(1);
+	}
 	
 	fprintf(stdout, "sent\n");
 	

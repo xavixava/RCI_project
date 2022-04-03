@@ -12,7 +12,7 @@
 void interface(char **args)
 {
 	char buffer[64], Buffer[257], *key, *address, *port, *info;
-	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0;
+	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0, seq;
 	Node *this, *suc=NULL, *pred=NULL, *chord=NULL;
 	struct sockaddr_in addr;
 	socklen_t addrlen;
@@ -25,6 +25,8 @@ void interface(char **args)
 		
 	memset(buffer, '\0', 64); //clear buffer
 	memset(Buffer, '\0', 257); //clear buffer
+	 
+	seq = rand() % 100;
 	 
 	key = args[1];
 	chave = atoi(key);
@@ -237,8 +239,9 @@ void interface(char **args)
 				}
 				else if((strcmp(buffer, "find") == 0)||(strcmp(buffer, "f") == 0))
 				{
-					if (ring==1)fndrecv(info, this, suc, pred);
+					if (ring==1)fnd(info, this, suc, pred, seq);
 					else fprintf(stdout, "Not in ring!\n");
+					seq++;
 				}
 				else if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))
 				{
@@ -471,7 +474,7 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 	}
 	else if(aux->chave!=-1)
 	{
-		if(compareDist(this->chave, aux->chave, suc->chave, 0)==1)predInform(suc, aux);
+		if(dist(aux->chave, this->chave) > dist(suc->chave, this->chave))predInform(suc, aux);
 		if(aux->fd!=0 && aux->chave!=pred->chave)n = close(aux->fd);
 		if(n==-1)
 		{
@@ -496,9 +499,14 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred)	//find almost compl
 	address = handle_args(address, key);
 	port = handle_instructions(address);
 	port = handle_args(port, key);
-	port = newline(port);
+	info = newline(port);
 	
-	if(compareDist(atoi(key), this->chave, suc->chave, 0)<=0)
+	
+	if(suc->chave==atoi(searchee))
+	{
+		sprintf(message, "RSP %s %s %d %d.%s %d.%s\n", key, seq, suc->chave, suc->chave, suc->address, suc->chave, suc->port);
+	}
+	else if(compareDist(atoi(searchee), this->chave, suc->chave, 0)<=0)
 	{
 		sprintf(message, "RSP %s %s %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
 	}
@@ -521,26 +529,37 @@ void RSPrecv (char *info, Node *this, Node *suc)
 	address = handle_args(address, key);
 	port = handle_instructions(address);
 	port = handle_args(port, key);
-	port = newline(port);
+	info = newline(port);
 	
 	sprintf(message, "RSP %s %s %s %s.%s %s.%s\n", searchee, seq, key, key, address, key, port);
 	
-	if(atoi(key) == this->chave) fprintf(stdout, "%s", message);
+	if(atoi(searchee) == this->chave) fprintf(stdout, "%s", message);
 	else GenericTCPsend(suc, message);
 	
 	return;
 }
 
-void fndrecv(char *info, Node *this, Node *suc, Node *pred)
+void fnd(char *info, Node *this, Node *suc, Node *pred, int seq)
 {
-	char message[64], *key;
-	int seq;
+	char message[64], *key=info;
 	
-	key = newline(info);
+	info = newline(key);
 	
-	seq = rand() % 100;
+	fprintf(stdout, "%s\n", key);
 	
-	if (compareDist(atoi(key), pred->chave, this->chave, 0)<=0)
+	/*if(pred->chave==this->chave)
+	{
+		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
+		fprintf(stdout, "%s", message);
+		return;
+	}*/
+	if(suc->chave==atoi(key))
+	{
+		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, suc->chave, suc->chave, suc->address, suc->chave, suc->port);
+		fprintf(stdout, "%s", message);
+		return;
+	}
+	else if (compareDist(atoi(key), pred->chave, this->chave, 0)<=0)
 	{
 		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, pred->chave, pred->chave, pred->address, pred->chave, pred->port);
 		fprintf(stdout, "%s", message);
@@ -594,10 +613,11 @@ void RingLeave(Node *this, Node *suc, Node *pred)
 */
 int compareDist(int this, int a, int b, int flag)
 {
-	int dista, distb;
-	
+	unsigned int dista, distb;
 	dista = dist(this, a);
 	distb = dist(this, b);
+
+	fprintf(stdout, "%d- %d: %d  %d: %d\n",this , a, dista, b, distb);	
 	
 	if(dista==distb)
 	{
@@ -613,13 +633,13 @@ unsigned int dist(int this, int measuree)
 {
 	int dist=0;
 	if (this==measuree)return 0;
-	else if (this>measuree){
-		dist = MAX_NODES+1-(this);
-		dist = dist + (measuree);
+	else if (this<measuree){
+		dist = MAX_NODES+1-(measuree);
+		dist = dist + (this);
 	}
 	else
 	{
-		dist = (measuree)-(this);
+		dist = (this)-(measuree);
 	}
 	return dist;
 }

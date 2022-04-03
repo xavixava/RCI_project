@@ -18,7 +18,7 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info);
 void PREDrcv(Node *this, Node *suc, Node *pred, char *info);
 void RSPrecv (char *info, Node *this, Node *suc);
 void FNDrecv (char *info, Node *this, Node *suc, Node *pred);
-void fndrecv(char *info, Node *this, Node *suc, Node *pred);
+void fnd(char *info, Node *this, Node *suc, Node *pred, int seq);
 void RingLeave(Node *this, Node *suc, Node *pred);
 
 int compareDist(int this, int a, int b, int flag);
