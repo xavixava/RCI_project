@@ -15,7 +15,7 @@ char *newline(char *arg);
 
 void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd);
 void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info);
-void PREDrcv(Node *this, Node *suc, Node *pred, int fd, char *info);
+void PREDrcv(Node *this, Node *suc, Node *pred, char *info);
 void RSPrecv (char *info, Node *this, Node *suc);
 void FNDrecv (char *info, Node *this, Node *suc, Node *pred);
 void fndrecv(char *info, Node *this, Node *suc, Node *pred);

@@ -398,7 +398,7 @@ void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int 
 		}
 		else if(strcmp("PRED", buffer)==0) //received PRED message
 		{				
-			PREDrcv(this, suc, pred, fd, info);
+			PREDrcv(this, suc, pred, info);
 		
 			fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
 			fprintf(stdout, "suc: %d %s %s\n", suc->chave, suc->address, suc->port);
@@ -411,7 +411,7 @@ void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int 
 	return;
 }
 
-void PREDrcv(Node *this, Node *suc, Node *pred, int fd,char *info)
+void PREDrcv(Node *this, Node *suc, Node *pred, char *info) //cria um fd diferente para pred ao fazer leave sem necessidade, se tiver tempo corrigir 
 {
 	char *address, *port, *key;
 	int n=0, chave;
@@ -430,8 +430,8 @@ void PREDrcv(Node *this, Node *suc, Node *pred, int fd,char *info)
 	{
 		fprintf(stderr, "%s\n", strerror(errno));
 		exit(1);
-	};
-			
+	}
+	
 	update(pred, chave, address, port, 0);
 					
 	fprintf(stdout, "pred: %d %s %s %d\n", pred->chave, pred->address, pred->port, pred->fd);
@@ -445,7 +445,7 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 {
 	Node *aux;
 	char *address, *port, *key;
-	int chave;
+	int chave, int fd;
 	int n=0;
 	
 	aux = create(-1, NULL, NULL);
