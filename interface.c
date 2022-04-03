@@ -1,10 +1,6 @@
 //interface.c
 
-/*
-*Notas: se encontrarmos perdas de memória, podemos só alocar o espaço para os nós no ínicio e depois ir atualizando valores
-*/
-
-
+//AS LIGAÇÕES ENTRE OS PREDS E SUCS SÃO PERMANENTES, CORRIGIR ISSO
 
 #include "interface.h"
 #include "network.h"
@@ -15,10 +11,9 @@
 
 void interface(char **args)
 {
-	char buffer[128], *key, *address, *port, *info;
-	int chave, newfd=0, maxfd = 0, counter, ring=0;
+	char buffer[64], Buffer[257], *key, *address, *port, *info;
+	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0;
 	Node *this, *suc=NULL, *pred=NULL, *chord=NULL;
-	Server *fds;
 	struct sockaddr_in addr;
 	socklen_t addrlen;
 	ssize_t n;
@@ -28,7 +23,8 @@ void interface(char **args)
 	tv.tv_sec = 30;
 	tv.tv_usec = 0;
 		
-	memset(buffer, '\0', 128); //clear buffer
+	memset(buffer, '\0', 64); //clear buffer
+	memset(Buffer, '\0', 257); //clear buffer
 	 
 	key = args[1];
 	chave = atoi(key);
@@ -41,10 +37,12 @@ void interface(char **args)
 	address = handle_args(args[2], key);
 	port = handle_args(args[3], key);
 	
-	fprintf(stdout, "%d %d.%s %d.%s\n", chave, chave, address, chave, port);
-	
 	this = create(chave, address, port); //Saves Node info on Node struct
-	fprintf(stdout, "%d %s %s\n", this->chave, this->address, this->port);//DELETE LATER
+	fprintf(stdout, "Node created: %d %s %s\n", this->chave, this->address, this->port);//DELETE LATER
+	
+	suc = create(-1, NULL, NULL);
+	pred = create(-1, NULL, NULL);
+	chord = create(-1, NULL, NULL);
 	
 	addrlen=sizeof(addr);
 	
@@ -52,75 +50,141 @@ void interface(char **args)
 	while(1)
 	{
 		FD_SET(0,&rfds);	//select will wait for stdin
-		if(ring==1){  		//only if is already in ring
-		FD_SET(fds->TcpFd,&rfds);	//select will wait for tcp connection
-		FD_SET(fds->UdpFd,&rfds);	//select will wait for udp message
+		FD_SET(TcpFd, &rfds);
+		FD_SET(pred->fd,&rfds);
+		FD_SET(suc->fd,&rfds);		//select will wait for tcp connection
+		FD_SET(UdpFd,&rfds);	//select will wait for udp message
 		FD_SET(newfd,&rfds);	//select will wait for tcp message from current connection	
 		
+		//fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd);
+
 		maxfd = max(0, newfd);			//Check which is the max file descriptor so select won´t have to check all fds
-		maxfd = max(maxfd, fds->UdpFd);
-		maxfd = max(maxfd, fds->TcpFd);
-		}
+		maxfd = max(maxfd, UdpFd);
+		maxfd = max(maxfd, TcpFd);
+		maxfd = max(maxfd, pred->fd);
+		maxfd = max(maxfd, suc->fd);
+		
 		counter = 0;
 		
-		counter = select(maxfd+1,&rfds, (fd_set*)NULL, (fd_set*)NULL, &tv);	
+		counter = select(maxfd+1, &rfds, (fd_set*)NULL, (fd_set*)NULL, &tv);	
 		
-		if(counter < 0)		//ERROR
+		if(counter==-1)
 		{
-			fprintf(stdout, "error in select!\n");
-			exit(1);
+		fprintf(stderr, "Select: %s\n", strerror(errno));
+		exit(1);
 		}
 		else if (counter == 0){
 			fprintf(stdout, "Please write something\n");	//timeout ocurred
 			tv.tv_sec = 30;
 		}
+			if(TcpFd!=0 && FD_ISSET(TcpFd,&rfds)){		//New tcp connection
+				FD_CLR(TcpFd,&rfds);
 				
-			if(ring==1)if(FD_ISSET(fds->TcpFd,&rfds)){		//New tcp connection
-				FD_CLR(fds->TcpFd,&rfds);
+				//if((newfd=accept(TcpFd,(struct sockaddr*)&addr,&addrlen))==-1)
+				if((newfd=accept(TcpFd, NULL, NULL))==-1)
+				{
+					fprintf(stdout, "Error in accept: ");
+					fprintf(stderr, "%s\n", strerror(errno));
+					exit(1);
+				}; //check if it will try to connect with more than one tcp socket at once
 				
-				if((newfd=accept(fds->TcpFd,(struct sockaddr*)&addr,&addrlen))==-1)exit(1); //check if it will try to connect with more than one tcp socket at once
 				fprintf(stdout, "Accepted connection\n");
 				
 				FD_SET(newfd,&rfds);	//making sure select knows that now it will have to check for a new fd(newfd - tcp socket)
 				
 				counter--;
-				memset(buffer, '\0', 128);
 			}
-			if(newfd!=0) if(FD_ISSET(newfd,&rfds)){ //something written in accepted tcp socket
+			if(pred->fd!=0 && FD_ISSET(pred->fd,&rfds))
+			{
+				FD_CLR(pred->fd,&rfds);
+				
+				do
+				{
+					n = read(pred->fd, Buffer, 256);
+					if(n==-1)
+					{
+						fprintf(stderr, "%s\n", strerror(errno));
+						exit(1);
+					}
+					else if (n==0)
+					{
+						n=close(pred->fd);
+						pred->fd=0;
+						if(pred->chave==suc->chave)suc->fd=0;
+						fprintf(stdout, "closed pred connection\n");
+					}
+					else
+					{
+						TcpRead(this, suc, pred, Buffer, buffer, pred->fd);
+					
+						memset(Buffer, '\0', 257);
+					}
+				}while(*buffer!='\0');
+				memset(buffer, '\0', 64);
+				counter--;		
+			}
+			if(suc->fd!=0 && FD_ISSET(suc->fd,&rfds) && suc->fd!=pred->fd)
+			{
+				FD_CLR(suc->fd,&rfds);
+				
+				do
+				{
+					n = read(suc->fd, Buffer, 256);
+					if(n==-1)
+					{
+						fprintf(stderr, "%s\n", strerror(errno));
+						exit(1);
+					}
+					else if (n==0)
+					{
+						n = close(suc->fd);
+						suc->fd=0;
+						fprintf(stdout, "closed suc connection\n");
+					}
+					else{
+						TcpRead(this, suc, pred, Buffer, buffer, suc->fd);
+					
+						memset(Buffer, '\0', 257);
+					}
+				}while(*buffer!='\0');
+				memset(buffer, '\0', 64);
+				counter--;		
+			} 
+			if(newfd != 0 && FD_ISSET(newfd, &rfds))//something written in accepted tcp socket
+			{ 
 				FD_CLR(newfd,&rfds);
 				
-				n = read(newfd, buffer, 127);
-				fprintf(stdout, "received: %s\n", buffer);
-				
-				
-				info = handle_instructions(buffer);				
-				if(strcmp("SELF", buffer)==0) //received SELF message 
+				do
 				{
-					SelfRcv(this, &suc, &pred, info);
-
-					fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
-					fprintf(stdout, "suc: %d %s %s\n", suc->chave, suc->address, suc->port);
+					n = read(newfd, Buffer, 256);
+					if(n==-1)
+					{
+						fprintf(stderr, "%s\n", strerror(errno));
+						exit(1);
+					}
+					else if (n==0)
+					{
+						n = close(newfd);
+						newfd=0;
+						fprintf(stdout, "closed newfd connection");
+					}
+					else
+					{
+					TcpRead(this, suc, pred, Buffer, buffer, newfd);
 					
-				}
-				else if(strcmp("PRED", buffer)==0) //received PRED message
-				{				
-					PREDrcv(this, &suc, &pred, info);
+					newfd=0;
 					
-					fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
-					fprintf(stdout, "suc: %d %s %s\n", suc->chave, suc->address, suc->port);
-				}
-				
-				
-				close(newfd); //closing newfd and telling select to not check it anymore
-				newfd=0;
-				
-				counter--;
-				memset(buffer, '\0', 128);	
+					memset(Buffer, '\0', 257);
+					}
+				}while(*buffer!='\0');
+				memset(buffer, '\0', 64);
+				counter--;				
 			}
-			if(FD_ISSET(0,&rfds)){ //received a command
+			if(FD_ISSET(0,&rfds)) //received a command
+			{
 				FD_CLR(0,&rfds);
 				
-				if(fgets(buffer, 128, stdin)==NULL)	//ERROR
+				if(fgets(buffer, 64, stdin)==NULL)	//ERROR 
 				{
 					fprintf(stdout, "Nothing read\n");
 					exit(1);
@@ -131,18 +195,19 @@ void interface(char **args)
 				if ((strcmp(buffer, "new\n") == 0)||(strcmp(buffer, "n\n") == 0)) 
 				{
 					fprintf(stdout, "Initiating a new ring\n");
-					pred = this;
-					suc = this;
-					fds = New(this->address, this->port);
+					update(pred, this->chave, this->address, this->port, 0);					
+					update(suc, this->chave, this->address, this->port, 0);
+					TcpFd = CreateTcpServer(this->port);
+					UdpFd = CreateUdpServer(this->port);
 					ring = 1;
 				}
 				else if((strcmp(buffer, "show\n") == 0)||(strcmp(buffer, "s\n") == 0))
 				{
 					fprintf(stdout, "This Node:\n-key = %d\n-address = %s\n-port = %s\n", this->chave, this->address, this->port);
-					if(pred!=NULL)fprintf(stdout, "Predecessor Node:\n-key = %d\n-address = %s\n-port = %s\n", pred->chave, pred->address, pred->port);
-					if(suc!=NULL)fprintf(stdout, "Successor Node:\n-key = %d\n-address = %s\n-port = %s\n", suc->chave, suc->address, suc->port);
+					if (pred->chave!=-1)fprintf(stdout, "Predecessor Node:\n-key = %d\n-address = %s\n-port = %s\n", pred->chave, pred->address, pred->port);
+					if (suc->chave!=-1)fprintf(stdout, "Successor Node:\n-key = %d\n-address = %s\n-port = %s\n", suc->chave, suc->address, suc->port);
 					
-					if(chord==NULL)fprintf(stdout, "No chord\n");
+					if(chord->chave==-1)fprintf(stdout, "No chord\n");
 					else fprintf(stdout, "Chord to:\n-key = %d\n-address = %s\n-port = %s\n", chord->chave, chord->address, chord->port);
 				}
 				else if((strcmp(buffer, "pentry") == 0)||(strcmp(buffer, "p") == 0))
@@ -152,30 +217,66 @@ void interface(char **args)
 					address = handle_args(address, key);
 					port = handle_instructions(address);
 					port = handle_args(port, key);
-					port = newline(port);
+					info = newline(port);
 					
-					if(pred==NULL)pred = create(atoi(key), address, port);
+					if(pred->chave!=-1)fprintf(stdout, "Already in ring\n");//ring==1
+					else
+					{
+						update(pred, atoi(key), address, port, 0);
+						fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
+				
+						TcpFd = CreateTcpServer(this->port);
+						UdpFd = CreateUdpServer(this->port);
+
+						pred->fd=selfInform(pred, this);
+						
+						ring = 1;
+					}
+
 					
-					fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
-		
-					selfInform(pred, this);
-		
-					fds = New(this->address, this->port);
-					ring = 1;
+				}
+				else if((strcmp(buffer, "find") == 0)||(strcmp(buffer, "f") == 0))
+				{
+					if (ring==1)fndrecv(info, this, suc, pred);
+					else fprintf(stdout, "Not in ring!\n");
 				}
 				else if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))
 				{
+					n=0;
 					if(ring!=1)fprintf(stdout, "Not in ring\n");
 					else
 					{
-						RingLeave(this, &suc, &pred);
-						if(newfd!=0)close(newfd);
-						fds = close_sockets(fds);
+						RingLeave(this, suc, pred);
+						if(newfd!=0)n = close(newfd);
+						newfd=0;
+						if(n==-1)
+						{
+							fprintf(stderr, "%s\n", strerror(errno));
+							exit(1);
+						}
+						close(TcpFd);
+						if(n==-1)
+						{
+							fprintf(stderr, "%s\n", strerror(errno));
+							exit(1);
+						}
+						TcpFd=0;
+						close(UdpFd);
+						if(n==-1)
+						{
+							fprintf(stderr, "%s\n", strerror(errno));
+							exit(1);
+						}
+						UdpFd=0;
 						ring=0;
 					}
 				}
+				else if (strcmp(buffer, "m\n") == 0) fprintf(stdout, "%d %d.%s %d.%s\n", this->chave, this->chave, this->address, this->chave, this->port);
 				else if ((strcmp(buffer, "exit\n") == 0)||(strcmp(buffer, "e\n") == 0))
 				{
+					freeNode(chord);;
+					freeNode(suc);
+					freeNode(pred);
 					freeNode(this);
 					return;
 				}
@@ -183,20 +284,20 @@ void interface(char **args)
 				else	fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
 				
 				counter--;
-				memset(buffer, '\0', 128);
+				memset(buffer, '\0', 64);
 			}
-			if(ring==1)if(FD_ISSET(fds->UdpFd,&rfds)){ //something written in udp socket
-				FD_CLR(fds->UdpFd,&rfds);
+			if(FD_ISSET(UdpFd,&rfds)){ //something written in udp socket
+				FD_CLR(UdpFd,&rfds);
 				
-				n = recvfrom(fds->UdpFd, buffer, 128, 0, (struct sockaddr *)&addr, &addrlen);
+				n = recvfrom(UdpFd, buffer, 64, 0, (struct sockaddr *)&addr, &addrlen);
 				write(1, "received: ", 10);
 				write(1, buffer, n);
 				
-				n = sendto(fds->UdpFd, "ACK", 3, 0, (struct sockaddr *)&addr, addrlen);
+				n = sendto(UdpFd, "ACK", 3, 0, (struct sockaddr *)&addr, addrlen);
 				if(n==-1)exit(1);
 				
 				counter--;
-				memset(buffer, '\0', 128);
+				memset(buffer, '\0', 64);
 			}
 		tv.tv_sec = 30;
 	}
@@ -204,7 +305,7 @@ void interface(char **args)
 	return;
 }
 
-char *handle_args(char *arg, char *key)
+char *handle_args(char *arg, char *key)//searches for the first '.' appearance in a string
 {
 	char *final, *aux, *point=".";
 	
@@ -229,14 +330,14 @@ char *handle_args(char *arg, char *key)
 	return final;
 }
 
-char *handle_instructions(char *arg)
+char *handle_instructions(char *arg)//searches for the first ' ' appearance in a string
 {
 	char *final, *aux, *space=" ";
 	
 	aux = strstr(arg, space);
 	
 	
-	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0 && strcmp(arg, "exit\n")!=0 && strcmp(arg, "e\n")!=0 && strcmp(arg, "clear\n")!=0)
+	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0 && strcmp(arg, "exit\n")!=0 && strcmp(arg, "e\n")!=0 && strcmp(arg, "clear\n")!=0 && strcmp(arg, "m\n")!=0)
 		{
 			fprintf(stdout, "%s", arg);
 			fprintf(stdout, "Por favor, formate devidamente as instruções\n");
@@ -252,88 +353,234 @@ char *handle_instructions(char *arg)
 	return final;
 }
 
-char *newline(char *arg)
+char *newline(char *arg)//searches for the first newline appearance in a string
 {
-	char *aux;
-	aux = strchr(arg, '\n');
-	if(aux!=NULL) *aux = '\0';
-	return arg;
+	char *aux, *nl="\n";
+	aux = strstr(arg, nl);
+	if(aux!=NULL)
+	{
+		*aux = '\0';
+		return aux+1;
+	}
+	else return aux;
 }
 
-void PREDrcv(Node *this, Node **suc, Node **pred, char *info)
+void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd)
+{
+	char *aux, *info;
+	
+	fprintf(stdout, "received: %s\n", Buffer);
+	aux = newline(Buffer);
+	
+	while(aux!=NULL)
+	{
+		
+		if(*buffer!='\0')strcat(buffer, Buffer);
+		else strcpy(buffer, Buffer);
+	
+		info = handle_instructions(buffer);
+	
+		if(strcmp("SELF", buffer)==0) //received SELF message 
+		{
+			SelfRcv(this, suc, pred, fd, info);
+
+			fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
+			fprintf(stdout, "suc: %d %s %s\n", suc->chave, suc->address, suc->port);
+					
+		}
+		else if(strcmp("FND", buffer)==0)
+		{
+			FNDrecv(info, this, suc, pred);
+		}
+		else if(strcmp("RSP", buffer)==0)
+		{
+			RSPrecv(info, this, suc);
+		}
+		else if(strcmp("PRED", buffer)==0) //received PRED message
+		{				
+			PREDrcv(this, suc, pred, fd, info);
+		
+			fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
+			fprintf(stdout, "suc: %d %s %s\n", suc->chave, suc->address, suc->port);
+		}
+		Buffer = aux;
+		aux = newline(Buffer);
+		memset(buffer, '\0', 64);
+		if(*Buffer!='\0' && aux==NULL)strcpy(buffer, Buffer);
+	}	
+	return;
+}
+
+void PREDrcv(Node *this, Node *suc, Node *pred, int fd,char *info)
 {
 	char *address, *port, *key;
+	int n=0, chave;
 	
 	key = info; //transform this into a function later
 	address = handle_instructions(info);
 	address = handle_args(address, key);
 	port = handle_instructions(address);
 	port = handle_args(port, key);
-	port = newline(port);
+	chave=atoi(key);
+	key = newline(port);
 					
-	fprintf(stdout, "pred: %d %s %s\n", atoi(key), address, port);
-					
-	if(*pred==*suc||*pred==NULL)*pred = create(atoi(key), address, port);
-	else
+	fprintf(stdout, "pred: %d %s %s\n", chave, address, port);
+	if (pred->fd!=0 && pred->chave!=suc->chave)n=close(pred->fd);
+	if(n==-1)
 	{
-		(*pred)->chave = atoi(key);
-		strcpy((*pred)->address, address);
-		strcpy((*pred)->port, port);
-	}
+		fprintf(stderr, "%s\n", strerror(errno));
+		exit(1);
+	};
+			
+	update(pred, chave, address, port, 0);
 					
-	fprintf(stdout, "pred: %d %s %s\n", (*pred)->chave, (*pred)->address, (*pred)->port);
+	fprintf(stdout, "pred: %d %s %s %d\n", pred->chave, pred->address, pred->port, pred->fd);
 		
-	if((*pred)->chave!=this->chave)selfInform(*pred, this);
-	else 
-	{
-		if(*suc!=*pred)freeNode(*suc);
-		*suc=*pred;
-	}
+	if(pred->chave!=this->chave) pred->fd = selfInform(pred, this);
+	else update(suc, pred->chave, pred->address, pred->port, pred->fd);
 	return;
 }
 
-void SelfRcv(Node *this, Node **suc, Node **pred, char *info)
+void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 {
 	Node *aux;
 	char *address, *port, *key;
+	int chave;
+	int n=0;
+	
+	aux = create(-1, NULL, NULL);
 	
 	key = info;
+	chave = atoi(key);
 	address = handle_instructions(info);
+	address = handle_args(address, key);
+	port = handle_instructions(address);
+	port = handle_args(port, key);
+	key = newline(port);
+	
+	fprintf(stdout, "suc: %d %s %s\n", chave, address, port);
+	
+	update(aux, suc->chave, suc->address, suc->port, suc->fd);
+	update(suc, chave, address, port, fd);
+	
+	if(pred->chave == this->chave){
+		//sleep(1); //enable while using valgrind
+		selfInform(suc, this);
+		update(pred, suc->chave, suc->address, suc->port, suc->fd);
+	}
+	else if(aux->chave!=-1)
+	{
+		if(compareDist(this->chave, aux->chave, suc->chave, 0)==1)predInform(suc, aux);
+		if(aux->fd!=0 && aux->chave!=pred->chave)n = close(aux->fd);
+		if(n==-1)
+		{
+			fprintf(stderr, "%s\n", strerror(errno));
+			exit(1);
+		};
+	}
+	
+	freeNode(aux);
+	
+	return;
+}
+
+void FNDrecv (char *info, Node *this, Node *suc, Node *pred)	//find almost completed, lacks case with only 2 nodes and 1 node
+{
+	char message[64], *searchee, *seq, *key, *address, *port;
+	
+	searchee = info;
+	seq = handle_instructions(searchee);
+	key = handle_instructions(seq);
+	address = handle_instructions(key);
 	address = handle_args(address, key);
 	port = handle_instructions(address);
 	port = handle_args(port, key);
 	port = newline(port);
 	
-	fprintf(stdout, "suc: %d %s %s\n", atoi(key), address, port);
-	aux = *suc;
-	*suc = create(atoi(key), address, port);
-	
-	if((*pred)->chave == this->chave){
-		if(*pred!=this){
-		freeNode(*pred);
-		}
-		//sleep(1); //enable while using valgrind
-		selfInform(*suc, this);
-		*pred = *suc;
-	}
-	else if(aux!=NULL)
+	if(compareDist(atoi(key), this->chave, suc->chave, 0)<=0)
 	{
-		if(compareDist(this, aux, *suc, 0)==1)predInform(*suc, aux);
-		if (aux!=*pred)freeNode(aux);
+		sprintf(message, "RSP %s %s %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
 	}
+	else sprintf(message, "FND %s %s %s %s.%s %s.%s\n", searchee, seq, key, key, address, key, port);
+	
+	GenericTCPsend(suc, message);
+
+	return;
+	
+}
+
+void RSPrecv (char *info, Node *this, Node *suc)
+{
+	char message[64], *searchee, *seq, *key, *address, *port;
+	
+	searchee = info;
+	seq = handle_instructions(searchee);
+	key = handle_instructions(seq);
+	address = handle_instructions(key);
+	address = handle_args(address, key);
+	port = handle_instructions(address);
+	port = handle_args(port, key);
+	port = newline(port);
+	
+	sprintf(message, "RSP %s %s %s %s.%s %s.%s\n", searchee, seq, key, key, address, key, port);
+	
+	if(atoi(key) == this->chave) fprintf(stdout, "%s", message);
+	else GenericTCPsend(suc, message);
+	
 	return;
 }
 
-void RingLeave(Node *this, Node **suc, Node **pred)
+void fndrecv(char *info, Node *this, Node *suc, Node *pred)
 {
-	if(*pred!=this && *suc!=this)
+	char message[64], *key;
+	int seq;
+	
+	key = newline(info);
+	
+	seq = rand() % 100;
+	
+	if (compareDist(atoi(key), pred->chave, this->chave, 0)<=0)
 	{
-		predInform(*pred, *suc);
-		freeNode(*pred);
-		if(*pred!=*suc)freeNode(*suc);
+		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, pred->chave, pred->chave, pred->address, pred->chave, pred->port);
+		fprintf(stdout, "%s", message);
+		return;
 	}
-	*pred = NULL;
-	*suc =NULL;
+	else if(compareDist(atoi(key), this->chave, suc->chave, 0)<=0)
+	{
+		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
+		fprintf(stdout, "%s", message);
+		return;
+	}
+	else sprintf(message, "FND %s %d %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
+	
+	GenericTCPsend(suc, message);
+
+	return;
+}
+
+void RingLeave(Node *this, Node *suc, Node *pred)
+{
+	int n=0;
+	if(pred->chave!=this->chave)//&& suc->chave!=this->chave
+	{
+		predInform(pred, suc);
+		if(pred->chave!=suc->chave)n = close(suc->fd);
+		if(n==-1)
+		{
+			fprintf(stderr, "%s\n", strerror(errno));
+			exit(1);
+		}
+		n = close(pred->fd);
+		if(n==-1)
+		{
+			fprintf(stderr, "%s\n", strerror(errno));
+			exit(1);
+		}
+	}
+	
+	nodeClear(pred);
+	nodeClear(suc);
+	
 	return;
 }
 
@@ -344,30 +591,34 @@ void RingLeave(Node *this, Node **suc, Node **pred)
 *				 -1 if dist(a, this)<dist(b, this)
 *	Extra info: if flag==0 no chords are considered, if flag==1consider chord				
 */
-int compareDist(Node *this, Node *a, Node *b, int flag)
+int compareDist(int this, int a, int b, int flag)
 {
 	int dista, distb;
 	
 	dista = dist(this, a);
 	distb = dist(this, b);
 	
-	if(dista==distb)return 0;
+	if(dista==distb)
+	{
+		fprintf(stdout, "returning 0\n");
+		return 0;
+	}
 	else if(max(dista, distb)==dista)return 1;
 	else if(max(dista, distb)==distb)return -1;
 	else return -2;
 }
 
-unsigned int dist(Node *this, Node *measuree)
+unsigned int dist(int this, int measuree)
 {
 	int dist=0;
-	if (this->chave==measuree->chave)return 0;
-	else if (this->chave>measuree->chave){
-		dist = MAX_NODES+1-(this->chave);
-		dist = dist + (measuree->chave);
+	if (this==measuree)return 0;
+	else if (this>measuree){
+		dist = MAX_NODES+1-(this);
+		dist = dist + (measuree);
 	}
 	else
 	{
-		dist = (measuree->chave)-(this->chave);
+		dist = (measuree)-(this);
 	}
 	return dist;
 }

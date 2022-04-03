@@ -2,27 +2,13 @@
 #include "network.h"
 #include "geral.h"
 
-extern int errno;
-
-Server *New (char *address, char *port)
-{
-	Server *new;
-	
-	new = (Server *) malloc(sizeof(Server));
-	
-	new -> TcpFd = CreateTcpServer(port);
-	new -> UdpFd = CreateUdpServer(port);
-
-	return new;
-}
-
-Server *close_sockets (Server *closee)
+/*Server *close_sockets (Server *closee)
 {
 	close(closee->TcpFd);
 	close(closee->UdpFd);
 	free(closee);
 	return NULL;
-}
+}*/
 
 int CreateTcpServer(char *port)
 {
@@ -83,7 +69,7 @@ int CreateUdpServer(char *port)
 	return fd;
 }
 
-void selfInform(Node *pred, Node *this)
+int selfInform(Node *pred, Node *this)
 {
 	int fd, errcode;
 	ssize_t n;
@@ -97,39 +83,48 @@ void selfInform(Node *pred, Node *this)
 	fprintf(stdout, "sending: %s", message);
 	fprintf(stdout, "to: %d %s %s\n", pred->chave, pred->address, pred->port);
 	
-	fd=socket(AF_INET,SOCK_STREAM, 0);//TCP socket
-	if(fd==-1)	exit(1);
-	
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET;//IPv4
-	hints.ai_socktype = SOCK_STREAM;//TCP socket
-	
-	errcode = getaddrinfo(pred->address, pred->port, &hints, &res);
-	if (errcode!=0)
+	if(pred->fd!=0)fd=pred->fd;
+	else
 	{
-		fprintf(stderr, "%s\n", gai_strerror(errcode));
-		exit(1);
-	};
+		fd=socket(AF_INET,SOCK_STREAM, 0);//TCP socket
+		if(fd==-1) 
+		{
+			fprintf(stderr, "%s\n", strerror(errno));
+			exit(1);
+		}
 	
-	n = connect(fd, res->ai_addr, res->ai_addrlen);
+		memset(&hints, 0, sizeof hints);
+		hints.ai_family = AF_INET;//IPv4
+		hints.ai_socktype = SOCK_STREAM;//TCP socket
+	
+		errcode = getaddrinfo(pred->address, pred->port, &hints, &res);
+		if (errcode!=0)
+		{
+			fprintf(stderr, "%s\n", gai_strerror(errcode));
+			exit(1);
+		};
+	
+		n = connect(fd, res->ai_addr, res->ai_addrlen);
+		if(n==-1)
+		{
+			fprintf(stderr, "%s\n", strerror(errno));
+			exit(1);
+		}
+		freeaddrinfo(res);
+	}
+	n = write(fd, message, strlen(message));
 	if(n==-1)
 	{
 		fprintf(stderr, "%s\n", strerror(errno));
 		exit(1);
 	};
-	
-	n = write(fd, message, strlen(message));
-	if(n==-1)exit(1);
-	
-	fprintf(stdout, "sent\n");
 		
-	freeaddrinfo(res);
-	close(fd);
+	//close(fd);
 
-	return;
+	return fd;
 }
 
-void predInform(Node *suc, Node *old_suc)
+int predInform(Node *suc, Node *old_suc)
 {
 	int fd, errcode;
 	ssize_t n;
@@ -141,35 +136,96 @@ void predInform(Node *suc, Node *old_suc)
 	sprintf(message, "PRED %d %d.%s %d.%s\n", suc->chave, suc->chave, suc->address, suc->chave, suc-> port);
 	
 	fprintf(stdout, "sending: %s", message);
+	fprintf(stdout, "to: %d %s %s through %d\n",  old_suc->chave, old_suc->address, old_suc->port, old_suc->fd);
 	
-	fd=socket(AF_INET,SOCK_STREAM, 0);//TCP socket
-	if(fd==-1)	exit(1);
-	
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET;//IPv4
-	hints.ai_socktype = SOCK_STREAM;//TCP socket
-	
-	errcode = getaddrinfo(old_suc->address, old_suc->port, &hints, &res);
-	if (errcode!=0)	
+	if(old_suc->fd!=0)fd=old_suc->fd;
+	else
 	{
-		fprintf(stderr, "%s\n", gai_strerror(errcode));
-		exit(1);
-	};
+		fd=socket(AF_INET,SOCK_STREAM, 0);//TCP socket
+		if(fd==-1) 
+		{
+			fprintf(stderr, "%s\n", strerror(errno));
+			exit(1);
+		}
 	
-	n = connect(fd, res->ai_addr, res->ai_addrlen);
-	if(n==-1) 
+		memset(&hints, 0, sizeof hints);
+		hints.ai_family = AF_INET;//IPv4
+		hints.ai_socktype = SOCK_STREAM;//TCP socket
+	
+		errcode = getaddrinfo(old_suc->address, old_suc->port, &hints, &res);
+		if (errcode!=0)	
+		{
+			fprintf(stderr, "%s\n", gai_strerror(errcode));
+			exit(1);
+		}
+	
+		n = connect(fd, res->ai_addr, res->ai_addrlen);
+		if(n==-1) 
+		{
+			fprintf(stderr, "%s\n", strerror(errno));
+			exit(1);
+		}
+		freeaddrinfo(res);
+	}
+	fprintf(stdout, "%d\n", fd);
+	n = write(fd, message, strlen(message));
+	if(n==-1)
 	{
 		fprintf(stderr, "%s\n", strerror(errno));
 		exit(1);
-	};
+	}
 	
+	fprintf(stdout, "sent\n");
+	
+	//close(fd);
+
+	return fd;
+}
+
+void GenericTCPsend(Node *suc, char *message)
+{
+	int fd, errcode;
+	ssize_t n;
+	struct addrinfo hints, *res;
+	
+	fprintf(stdout, "sending: %s", message);
+	fprintf(stdout, "to: %d %s %s\n", suc->chave, suc->address, suc->port);
+	
+	if(suc->fd!=0)(fd=suc->fd);
+	else
+	{
+		fd=socket(AF_INET,SOCK_STREAM, 0);//TCP socket
+		if(fd==-1) 
+		{
+			fprintf(stderr, "%s\n", strerror(errno));
+			exit(1);
+		}
+	
+		memset(&hints, 0, sizeof hints);
+		hints.ai_family = AF_INET;//IPv4
+		hints.ai_socktype = SOCK_STREAM;//TCP socket
+	
+		errcode = getaddrinfo(suc->address, suc->port, &hints, &res);
+		if (errcode!=0)	
+		{
+			fprintf(stderr, "%s\n", gai_strerror(errcode));
+			exit(1);
+		}
+	
+		n = connect(fd, res->ai_addr, res->ai_addrlen);
+		if(n==-1) 
+		{
+			fprintf(stderr, "%s\n", strerror(errno));
+			exit(1);
+		}
+		freeaddrinfo(res);
+	}
 	n = write(fd, message, strlen(message));
 	if(n==-1)exit(1);
 	
 	fprintf(stdout, "sent\n");
 	
-	freeaddrinfo(res);
-	close(fd);
+	//close(fd);
 
 	return;
 }

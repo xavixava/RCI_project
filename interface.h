@@ -13,12 +13,15 @@ char *handle_args(char *arg, char *key);
 char *handle_instructions(char *arg);
 char *newline(char *arg);
 
-void SelfRcv(Node *this, Node **suc, Node **pred, char *info);
-void PREDrcv(Node *this, Node **suc, Node **pred, char *info);
-void RingLeave(Node *this, Node **suc, Node **pred);
+void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd);
+void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info);
+void PREDrcv(Node *this, Node *suc, Node *pred, int fd, char *info);
+void RSPrecv (char *info, Node *this, Node *suc);
+void FNDrecv (char *info, Node *this, Node *suc, Node *pred);
+void fndrecv(char *info, Node *this, Node *suc, Node *pred);
+void RingLeave(Node *this, Node *suc, Node *pred);
 
-
-int compareDist(Node *this, Node *a, Node *b, int flag);
-unsigned int dist(Node *this, Node *measuree);
+int compareDist(int this, int a, int b, int flag);
+unsigned int dist(int this, int measuree);
 
 #endif
