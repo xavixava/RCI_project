@@ -13,6 +13,7 @@ void interface(char **args)
 {
 	char buffer[64], Buffer[257], *key, *address, *port, *info;
 	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0, seq;
+	Element **ht;
 	Node *this, *suc=NULL, *pred=NULL, *chord=NULL;
 	struct sockaddr_in addr;
 	socklen_t addrlen;
@@ -27,6 +28,8 @@ void interface(char **args)
 	memset(Buffer, '\0', 257); //clear buffer
 	 
 	seq = rand() % 100;
+	 
+	ht = CreateHashtable();
 	 
 	key = args[1];
 	chave = atoi(key);
@@ -117,7 +120,7 @@ void interface(char **args)
 					}
 					else
 					{
-						TcpRead(this, suc, pred, Buffer, buffer, pred->fd);
+						TcpRead(this, suc, pred, Buffer, buffer, pred->fd, ht);
 					
 						memset(Buffer, '\0', 257);
 					}
@@ -144,7 +147,7 @@ void interface(char **args)
 						fprintf(stdout, "closed suc connection\n");
 					}
 					else{
-						TcpRead(this, suc, pred, Buffer, buffer, suc->fd);
+						TcpRead(this, suc, pred, Buffer, buffer, suc->fd, ht);
 					
 						memset(Buffer, '\0', 257);
 					}
@@ -172,7 +175,7 @@ void interface(char **args)
 					}
 					else
 					{
-					TcpRead(this, suc, pred, Buffer, buffer, newfd);
+					TcpRead(this, suc, pred, Buffer, buffer, newfd, ht);
 					
 					newfd=0;
 					
@@ -239,9 +242,9 @@ void interface(char **args)
 				}
 				else if((strcmp(buffer, "find") == 0)||(strcmp(buffer, "f") == 0))
 				{
-					if (ring==1)fnd(info, this, suc, pred, seq);
+					if (ring==1)fnd(info, this, suc, pred, seq, ht);
 					else fprintf(stdout, "Not in ring!\n");
-					seq++;
+					seq = (seq + 1) % 100;
 				}
 				else if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))
 				{
@@ -281,6 +284,7 @@ void interface(char **args)
 					freeNode(suc);
 					freeNode(pred);
 					freeNode(this);
+					FreeHash(ht);
 					return;
 				}
 				else if(strcmp(buffer, "clear\n")==0) system("clear");
@@ -368,7 +372,7 @@ char *newline(char *arg)//searches for the first newline appearance in a string
 	else return aux;
 }
 
-void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd)
+void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd, Element **ht)
 {
 	char *aux, *info;
 	
@@ -391,13 +395,10 @@ void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int 
 			fprintf(stdout, "suc: %d %s %s\n", suc->chave, suc->address, suc->port);
 					
 		}
-		else if(strcmp("FND", buffer)==0)
-		{
-			FNDrecv(info, this, suc, pred);
-		}
+		else if(strcmp("FND", buffer)==0)	FNDrecv(info, this, suc, pred);
 		else if(strcmp("RSP", buffer)==0)
 		{
-			RSPrecv(info, this, suc);
+			RSPrecv(info, this, suc, ht);
 		}
 		else if(strcmp("PRED", buffer)==0) //received PRED message
 		{				
@@ -518,9 +519,11 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred)	//find almost compl
 	
 }
 
-void RSPrecv (char *info, Node *this, Node *suc)
+void RSPrecv (char *info, Node *this, Node *suc, Element **ht)
 {
+	Node *aux=NULL;
 	char message[64], *searchee, *seq, *key, *address, *port;
+	unsigned int hashi;
 	
 	searchee = info;
 	seq = handle_instructions(searchee);
@@ -531,18 +534,21 @@ void RSPrecv (char *info, Node *this, Node *suc)
 	port = handle_args(port, key);
 	info = newline(port);
 	
+	hashi = hash(atoi(seq));
+	aux = Retrieve_del(ht, hashi, atoi(seq));
 	sprintf(message, "RSP %s %s %s %s.%s %s.%s\n", searchee, seq, key, key, address, key, port);
-	
-	if(atoi(searchee) == this->chave) fprintf(stdout, "%s", message);
-	else GenericTCPsend(suc, message);
-	
+	if(aux==NULL){
+		if(atoi(searchee) == this->chave) fprintf(stdout, "%s", message);
+		else GenericTCPsend(suc, message);
+	}
+	else fprintf(stdout, "bentrada");
 	return;
 }
 
-void fnd(char *info, Node *this, Node *suc, Node *pred, int seq)
+void fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht)
 {
 	char message[64], *key=info;
-	
+	unsigned int hashi;
 	info = newline(key);
 	
 	fprintf(stdout, "%s\n", key);
@@ -553,6 +559,7 @@ void fnd(char *info, Node *this, Node *suc, Node *pred, int seq)
 		fprintf(stdout, "%s", message);
 		return;
 	}*/
+	
 	if(suc->chave==atoi(key))
 	{
 		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, suc->chave, suc->chave, suc->address, suc->chave, suc->port);
@@ -571,7 +578,12 @@ void fnd(char *info, Node *this, Node *suc, Node *pred, int seq)
 		fprintf(stdout, "%s", message);
 		return;
 	}
-	else sprintf(message, "FND %s %d %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
+	else
+	{
+		hashi = hash(seq);
+		Insert(ht, hashi, atoi(key), NULL);
+		sprintf(message, "FND %s %d %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
+	}
 	
 	GenericTCPsend(suc, message);
 
