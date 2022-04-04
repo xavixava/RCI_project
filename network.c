@@ -2,14 +2,6 @@
 #include "network.h"
 #include "geral.h"
 
-/*Server *close_sockets (Server *closee)
-{
-	close(closee->TcpFd);
-	close(closee->UdpFd);
-	free(closee);
-	return NULL;
-}*/
-
 int CreateTcpServer(char *port)
 {
 	int fd, enable=1;
@@ -240,39 +232,41 @@ void GenericTCPsend(Node *suc, char *message)
 	return;
 }
 
-	/*Connect by udp
+void GenericUDPsend(Node *receiver, char *message)
+{
+	//Connect by udp
 	
 	int fd, errcode;
 	ssize_t n;
 	socklen_t addrlen;
 	struct addrinfo hints, *res;
 	struct sockaddr_in addr;
-	char buffer[4], message[64];
-	
-	
-	buffer[4]='\0';
-	memset(message, '\0', sizeof(message));
-	
-	sprintf(message, "SELF %d %d.%s %d.%s\n", this->chave, this->chave, this->address, this->chave, this-> port);
 	
 	fprintf(stdout, "%s", message);
 	
 	fd = socket(AF_INET, SOCK_DGRAM, 0); //socket udp
-	if(fd==-1)exit(1);
+	if(fd==-1) 
+	{
+		fprintf(stderr, "%s\n", strerror(errno));
+		exit(1);
+	}
 	
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET; //IPv4
 	hints.ai_socktype = SOCK_DGRAM; //UDP socket
-	
-	fprintf(stdout, "pred: %d %s %s\n", pred->chave, pred->address, pred->port);
 
-	errcode = getaddrinfo(pred->address, pred->port, &hints, &res);
-	if (errcode!=0)exit(1);
-	
+	errcode = getaddrinfo(receiver->address, receiver->port, &hints, &res);
+	if (errcode!=0)
+	{
+		fprintf(stderr, "%s\n", gai_strerror(errcode));
+		exit(1);
+	}
 	n = sendto(fd, message, strlen(message), 0, res->ai_addr, res->ai_addrlen);
-	if(n==-1)exit(1);
-
-	addrlen = sizeof(addr);
-	n = recvfrom(fd, buffer, 48, 0, (struct sockaddr *)&addr, &addrlen);
-	write(1, "echo: ", 6);
-	write(1, buffer, n);*/
+	if(n==-1)
+	{
+		fprintf(stderr, "%s\n", strerror(errno));
+		exit(1);
+	}
+	
+	return;	
+}

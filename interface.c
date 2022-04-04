@@ -11,10 +11,10 @@
 
 void interface(char **args)
 {
-	char buffer[64], Buffer[257], *key, *address, *port, *info;
-	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0, seq;
+	char buffer[64], Buffer[257], *key, *address, *port, *info, message[32];
+	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0, seq, bent=0;
 	Element **ht;
-	Node *this, *suc=NULL, *pred=NULL, *chord=NULL;
+	Node *this, *suc=NULL, *pred=NULL, *chord=NULL, aux;
 	struct sockaddr_in addr;
 	socklen_t addrlen;
 	ssize_t n;
@@ -79,6 +79,7 @@ void interface(char **args)
 		exit(1);
 		}
 		else if (counter == 0){
+			if(bent==1)fprintf(stdout, "did not receive ACK, please try another node\n");
 			fprintf(stdout, "Please write something\n");	//timeout ocurred
 			tv.tv_sec = 30;
 		}
@@ -240,6 +241,36 @@ void interface(char **args)
 
 					
 				}
+				else if((strcmp(buffer, "bentry") == 0)||(strcmp(buffer, "b") == 0))
+				{
+					key = info;
+					address = handle_instructions(info);
+					address = handle_args(address, key);
+					port = handle_instructions(address);
+					port = handle_args(port, key);
+					info = newline(port);
+
+					if(pred->chave!=-1)fprintf(stdout, "Already in ring\n");//ring==1
+					else
+					{
+						update(&aux, atoi(key), address, port, 0);
+						
+						fprintf(stdout, "Bentry: %d %s %s\n", pred->chave, pred->address, pred->port);
+				
+						sprintf(message, "FND %d %d %d %d.%s %d.%s", this->chave, seq, this->chave, this->chave, this->address, this->chave, this->port);
+						
+						TcpFd = CreateTcpServer(this->port);
+						UdpFd = CreateUdpServer(this->port);
+						
+						tv.tv_sec = 3;
+						
+						GenericUDPsend(&aux, message);
+						
+						nodeClear(&aux);
+						
+						ring = 1;
+					}
+				}
 				else if((strcmp(buffer, "find") == 0)||(strcmp(buffer, "f") == 0))
 				{
 					if (ring==1)fnd(info, this, suc, pred, seq, ht);
@@ -306,7 +337,7 @@ void interface(char **args)
 				counter--;
 				memset(buffer, '\0', 64);
 			}
-		tv.tv_sec = 30;
+		if(bent==0)tv.tv_sec = 30;
 	}
 	
 	return;

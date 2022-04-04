@@ -18,5 +18,6 @@ int selfInform(Node *pred, Node *this);
 int predInform(Node *suc, Node *old_suc);
 
 void GenericTCPsend(Node *suc, char *message);
+void GenericUDPsend(Node *receiver, char *message);
 
 #endif
