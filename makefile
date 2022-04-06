@@ -14,7 +14,7 @@ ring: $(OBJECTS)
 
 main.o: main.c interface.h 
 
-interface.o: interface.c interface.h network.h 
+interface.o: interface.c interface.h 
 
 node.o: node.c node.h 
 

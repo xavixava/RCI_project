@@ -10,6 +10,8 @@ typedef struct Element{
 	struct Element *next;
 }Element;
 
+#include "interface.h"
+
 Element *AllocElem();
 Element **CreateHashtable();
 void FreeHash(Element **ht);

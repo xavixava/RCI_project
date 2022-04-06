@@ -232,7 +232,7 @@ void GenericTCPsend(Node *suc, char *message)
 	return;
 }
 
-void GenericUDPsend(Node *receiver, char *message)
+int GenericUDPsend(Node *receiver, char *message)
 {
 	//Connect by udp
 	
@@ -268,5 +268,7 @@ void GenericUDPsend(Node *receiver, char *message)
 		exit(1);
 	}
 	
-	return;	
+	freeaddrinfo(res);
+	
+	return fd;	
 }

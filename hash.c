@@ -86,6 +86,7 @@ void *Retrieve(Element **ht, int hash, int key){
 void *Retrieve_del(Element **ht, int hash, int key){
 	Element *aux, *next;
 	void *auxi;
+	Save *something;
 	aux = ht[hash];
 	while(aux->next != NULL && aux->key != key)aux = aux->next;
 	auxi = aux->entry;
@@ -100,6 +101,9 @@ void *Retrieve_del(Element **ht, int hash, int key){
 		aux->next = next->next;
 		free(next);
 	}
+	
+	something=auxi;
+	
 	return auxi;
 }
 
@@ -109,12 +113,15 @@ void *Retrieve_del(Element **ht, int hash, int key){
 
 void Insert(Element **ht, int hash, int key, void *stuff){
 	Element *aux, *auxi;
+	Save *something;
 	if((ht[hash]->entry) == NULL){ 
 		(ht[hash]->entry) = stuff;
 		ht[hash]->next = NULL;
 		ht[hash]->key = key;
+	
 	}
 	else {
+		
 		auxi = AllocElem();
 		aux = ht[hash];
 		while(aux->next != NULL){

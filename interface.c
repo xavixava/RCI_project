@@ -3,19 +3,26 @@
 //AS LIGAÇÕES ENTRE OS PREDS E SUCS SÃO PERMANENTES, CORRIGIR ISSO
 
 #include "interface.h"
-#include "network.h"
 
 #define max(A,B) ((A)>=(B)?(A):(B))
+
+/*typedef struct Save
+{	
+	char message[32];
+	struct sockaddr_in addr;
+}Save;*/
 
 //extern Node *this=NULL, *suc=NULL, *pred=NULL, *chord=NULL; //descobrir o porquê do warning, ficaria mais fácil assim
 
 void interface(char **args)
 {
 	char buffer[64], Buffer[257], *key, *address, *port, *info, message[32];
-	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0, seq, bent=0;
+	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0, seq, bent=0, ack=0;
 	Element **ht;
-	Node *this, *suc=NULL, *pred=NULL, *chord=NULL, aux;
+	int i;
+	Node *this, *suc=NULL, *pred=NULL, *chord=NULL, *aux=NULL;
 	struct sockaddr_in addr;
+	Save *aux_addr=NULL;
 	socklen_t addrlen;
 	ssize_t n;
 	fd_set rfds;
@@ -61,7 +68,7 @@ void interface(char **args)
 		FD_SET(UdpFd,&rfds);	//select will wait for udp message
 		FD_SET(newfd,&rfds);	//select will wait for tcp message from current connection	
 		
-		fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd);
+		//fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd);
 
 		maxfd = max(0, newfd);			//Check which is the max file descriptor so select won´t have to check all fds
 		maxfd = max(maxfd, UdpFd);
@@ -79,9 +86,11 @@ void interface(char **args)
 		exit(1);
 		}
 		else if (counter == 0){
-			if(bent==1)fprintf(stdout, "did not receive ACK, please try another node\n");
+			if (ack==1)fprintf(stdout, "did not receive ACK, please try another node\n");
+			else if(bent==1)fprintf(stdout, "did not receive bent, please try another node\n");
 			fprintf(stdout, "Please write something\n");	//timeout ocurred
 			tv.tv_sec = 30;
+			bent=0;
 		}
 			if(TcpFd!=0 && FD_ISSET(TcpFd,&rfds)){		//New tcp connection
 				FD_CLR(TcpFd,&rfds);
@@ -121,7 +130,7 @@ void interface(char **args)
 					}
 					else
 					{
-						TcpRead(this, suc, pred, Buffer, buffer, pred->fd, ht);
+						aux_addr = TcpRead(this, suc, pred, Buffer, buffer, pred->fd, ht);
 					
 						memset(Buffer, '\0', 257);
 					}
@@ -148,7 +157,7 @@ void interface(char **args)
 						fprintf(stdout, "closed suc connection\n");
 					}
 					else{
-						TcpRead(this, suc, pred, Buffer, buffer, suc->fd, ht);
+						aux_addr = TcpRead(this, suc, pred, Buffer, buffer, suc->fd, ht);
 					
 						memset(Buffer, '\0', 257);
 					}
@@ -176,7 +185,7 @@ void interface(char **args)
 					}
 					else
 					{
-					TcpRead(this, suc, pred, Buffer, buffer, newfd, ht);
+					aux_addr = TcpRead(this, suc, pred, Buffer, buffer, newfd, ht);
 					
 					newfd=0;
 					
@@ -250,30 +259,29 @@ void interface(char **args)
 					port = handle_args(port, key);
 					info = newline(port);
 
-					if(pred->chave!=-1)fprintf(stdout, "Already in ring\n");//ring==1
+					if(pred->chave!=-1||suc->chave!=-1)fprintf(stdout, "Already in ring\n");//ring==1
 					else
 					{
-						update(&aux, atoi(key), address, port, 0);
+						aux=create(atoi(key), address, port);
 						
-						fprintf(stdout, "Bentry: %d %s %s\n", pred->chave, pred->address, pred->port);
+						fprintf(stdout, "Bentry: %d %s %s\n", aux->chave, aux->address, aux->port);
 				
-						sprintf(message, "FND %d %d %d %d.%s %d.%s", this->chave, seq, this->chave, this->chave, this->address, this->chave, this->port);
-						
-						TcpFd = CreateTcpServer(this->port);
-						UdpFd = CreateUdpServer(this->port);
+						sprintf(message, "EFND %d", this->chave);
 						
 						tv.tv_sec = 3;
 						
-						GenericUDPsend(&aux, message);
+						UdpFd = GenericUDPsend(aux, message); //atenção, ele pode aqui ficar bloqueado à espera do ACK, pois ainda não foram criados outros sockets
 						
-						nodeClear(&aux);
+						bent=1;
+						ack=1;
 						
-						ring = 1;
+						freeNode(aux);
+						
 					}
 				}
 				else if((strcmp(buffer, "find") == 0)||(strcmp(buffer, "f") == 0))
 				{
-					if (ring==1)fnd(info, this, suc, pred, seq, ht);
+					if (ring==1)fnd(info, this, suc, pred, seq, ht, NULL);
 					else fprintf(stdout, "Not in ring!\n");
 					seq = (seq + 1) % 100;
 				}
@@ -319,25 +327,113 @@ void interface(char **args)
 					return;
 				}
 				else if(strcmp(buffer, "clear\n")==0) system("clear");
-				else	fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
+				else fprintf(stdout, "Comando Desconhecido ou ainda não implementado\n");
 				
 				counter--;
 				memset(buffer, '\0', 64);
+			}
+			if(aux_addr!=NULL)
+			{
+				/*fprintf(stdout, "check fam, %d %d\n", addr.sin_family, aux_addr->addr.sin_family);
+				if(addr.sin_port==aux_addr->addr.sin_port)fprintf(stdout,"check port");
+				fprintf(stdout, "port, %u %u\n", addr.sin_port, aux_addr->addr.sin_port);
+				fprintf(stdout, "check addr, %u %u\n", addr.sin_addr.s_addr, aux_addr->addr.sin_addr.s_addr);*/
+				addr=aux_addr->addr;
+				/*if(addr.sin_family!=AF_INET)fprintf(stdout, "ERROR!!!\n");
+				//addr.sin_family=AF_INET;*/
+				n = sendto(UdpFd, aux_addr->message, strlen(aux_addr->message), 0, (struct sockaddr *)&addr, addrlen);
+				if(n==-1)
+				{
+					fprintf(stderr, "%s\n", strerror(errno));
+					exit(1);
+				}
+				ack = 1;
 			}
 			if(FD_ISSET(UdpFd,&rfds)){ //something written in udp socket
 				FD_CLR(UdpFd,&rfds);
 				
-				n = recvfrom(UdpFd, buffer, 64, 0, (struct sockaddr *)&addr, &addrlen);
-				write(1, "received: ", 10);
-				write(1, buffer, n);
+				n = recvfrom(UdpFd, Buffer, 64, 0, (struct sockaddr *)&addr, &addrlen);
+				if(n==-1)
+				{
+					fprintf(stderr, "%s\n", strerror(errno));
+					exit(1);
+				}
 				
-				n = sendto(UdpFd, "ACK", 3, 0, (struct sockaddr *)&addr, addrlen);
-				if(n==-1)exit(1);
+				write(1, "received: ", 10);
+				write(1, Buffer, n);
+				fprintf(stdout, " via udp\n");
+				
+				
+				if(strcmp(Buffer, "ACK")==0) ack=0;
+				else 
+				{
+					n = sendto(UdpFd, "ACK", 3, 0, (struct sockaddr *)&addr, addrlen); 
+					if(n==-1)
+					{
+						fprintf(stderr, "%s\n", strerror(errno));
+						exit(1);
+					}
+					
+					info = handle_instructions(Buffer);
+					
+					if(strcmp(Buffer, "EFND")==0)
+					{ 
+						aux_addr = (Save *) malloc(sizeof(Save));
+						aux_addr->addr=addr;
+						/*if(addr.sin_family==aux_addr->addr.sin_family)fprintf(stdout, "check fam, %d %d\n", addr.sin_family, aux_addr->addr.sin_family);
+						if(addr.sin_port==aux_addr->addr.sin_port)fprintf(stdout, "check port, %u %u\n", addr.sin_port, aux_addr->addr.sin_port);
+						if(addr.sin_addr.s_addr==aux_addr->addr.sin_addr.s_addr)fprintf(stdout, "check addr, %u %u\n", addr.sin_addr.s_addr, aux_addr->addr.sin_addr.s_addr);
+						for(i=0; i<8; i++)if(addr.sin_zero[i]==aux_addr->addr.sin_zero[i])fprintf(stdout, "check zero %d %d %i\n", addr.sin_zero[i], aux_addr->addr.sin_zero[i], i);*/
+						aux_addr = fnd(info, this, suc, pred, seq, ht, aux_addr);
+						seq = (seq + 1) % 100;
+						if(aux_addr!=NULL)
+						{
+							n = sendto(UdpFd, aux_addr->message, strlen(aux_addr->message), 0, (struct sockaddr *)&addr, addrlen);
+							if(n==-1)
+							{
+								fprintf(stderr, "%s\n", strerror(errno));
+								exit(1);
+							}
+							ack = 1;
+						}
+					}
+					else if(strcmp(Buffer, "EPRED")==0)
+					{
+						fprintf(stdout, "received: %s - via udp\n", Buffer);
+						bent = 0;
+						
+						key = info;
+						address = handle_instructions(info);
+						address = handle_args(address, key);
+						port = handle_instructions(address);
+						port = handle_args(port, key);
+						info = newline(port);
+						
+						update(pred, atoi(key), address, port, 0);
+						fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
+				
+						TcpFd = CreateTcpServer(this->port);
+						UdpFd = CreateUdpServer(this->port);
+
+						pred->fd=selfInform(pred, this);
+						
+						ring = 1;
+					}
+					else if(strcmp(Buffer, "FND")==0) fprintf(stdout, "FND\n");
+					else if(strcmp(Buffer, "RSP")==0) fprintf(stdout, "RSP\n");
+				}
 				
 				counter--;
-				memset(buffer, '\0', 64);
+				memset(Buffer, '\0', 257);
 			}
-		if(bent==0)tv.tv_sec = 30;
+		if(bent==0&&ack==0)tv.tv_sec = 30;
+		else tv.tv_sec=3;
+		if(aux_addr!=NULL)
+		{
+			free(aux_addr->message);
+			free(aux_addr);
+			aux_addr=NULL;
+		}
 	}
 	
 	return;
@@ -403,9 +499,10 @@ char *newline(char *arg)//searches for the first newline appearance in a string
 	else return aux;
 }
 
-void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd, Element **ht)
+void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd, Element **ht)
 {
 	char *aux, *info;
+	void *fun_aux=NULL;
 	
 	fprintf(stdout, "received: %s\n", Buffer);
 	aux = newline(Buffer);
@@ -429,7 +526,7 @@ void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int 
 		else if(strcmp("FND", buffer)==0)	FNDrecv(info, this, suc, pred);
 		else if(strcmp("RSP", buffer)==0)
 		{
-			RSPrecv(info, this, suc, ht);
+			fun_aux=RSPrecv(info, this, suc, ht);
 		}
 		else if(strcmp("PRED", buffer)==0) //received PRED message
 		{				
@@ -443,7 +540,7 @@ void TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int 
 		memset(buffer, '\0', 64);
 		if(*Buffer!='\0' && aux==NULL)strcpy(buffer, Buffer);
 	}	
-	return;
+	return fun_aux;
 }
 
 void PREDrcv(Node *this, Node *suc, Node *pred, char *info) //cria um fd diferente para pred ao fazer leave sem necessidade, se tiver tempo corrigir 
@@ -550,10 +647,10 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred)	//find almost compl
 	
 }
 
-void RSPrecv (char *info, Node *this, Node *suc, Element **ht)
+void *RSPrecv (char *info, Node *this, Node *suc, Element **ht)
 {
-	Node *aux=NULL;
-	char message[64], *searchee, *seq, *key, *address, *port;
+	Save *aux;
+	char message[64], *searchee, *seq, *key, *address, *port, *msg;
 	unsigned int hashi;
 	
 	searchee = info;
@@ -567,58 +664,89 @@ void RSPrecv (char *info, Node *this, Node *suc, Element **ht)
 	
 	hashi = hash(atoi(seq));
 	aux = Retrieve_del(ht, hashi, atoi(seq));
-	sprintf(message, "RSP %s %s %s %s.%s %s.%s\n", searchee, seq, key, key, address, key, port);
+	
 	if(aux==NULL){
+		sprintf(message, "RSP %s %s %s %s.%s %s.%s\n", searchee, seq, key, key, address, key, port);
 		if(atoi(searchee) == this->chave) fprintf(stdout, "%s", message);
 		else GenericTCPsend(suc, message);
 	}
-	else fprintf(stdout, "bentrada");
-	return;
+	else 
+	{
+		sprintf(message, "EPRED %s %s.%s %s.%s\n", key, key, address, key, port);
+		msg = (char *) malloc (strlen(message)+1);
+		strcpy(msg, message);
+		aux->message=msg;
+	}
+	return aux;
 }
 
-void fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht)
+void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, Save *addr)
 {
-	char message[64], *key=info;
+	char message[64], *key=info, *msg;
 	unsigned int hashi;
+	
 	info = newline(key);
 	
 	fprintf(stdout, "%s\n", key);
 	
-	/*if(pred->chave==this->chave)
-	{
-		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
-		fprintf(stdout, "%s", message);
-		return;
-	}*/
-	
 	if(suc->chave==atoi(key))
 	{
-		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, suc->chave, suc->chave, suc->address, suc->chave, suc->port);
-		fprintf(stdout, "%s", message);
-		return;
+		if (addr==NULL)
+		{
+			sprintf(message, "RSP %d %d.%s %d.%s\n", suc->chave, suc->chave, suc->address, suc->chave, suc->port);
+			fprintf(stdout, "%s", message);
+		}
+		else
+		{
+			sprintf(message, "EPRED %d %d.%s %d.%s\n", suc->chave, suc->chave, suc->address, suc->chave, suc->port);
+			msg = (char *) malloc (strlen(message)+1);
+			strcpy(msg, message);
+			addr->message=msg;
+		}
+		return addr;
 	}
 	else if (compareDist(atoi(key), pred->chave, this->chave, 0)<=0)
 	{
-		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, pred->chave, pred->chave, pred->address, pred->chave, pred->port);
-		fprintf(stdout, "%s", message);
-		return;
+		if (addr==NULL)
+		{
+			sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, pred->chave, pred->chave, pred->address, pred->chave, pred->port);
+			fprintf(stdout, "%s", message);
+		}
+		else
+		{
+			sprintf(message, "EPRED %d %d.%s %d.%s\n", pred->chave, pred->chave, pred->address, pred->chave, pred->port);
+			msg = (char *) malloc (strlen(message)+1);
+			strcpy(msg, message);
+			addr->message=msg;
+		}
+		return addr;
 	}
 	else if(compareDist(atoi(key), this->chave, suc->chave, 0)<=0)
 	{
-		sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
-		fprintf(stdout, "%s", message);
-		return;
+		if (addr==NULL)
+		{
+			sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
+			fprintf(stdout, "%s", message);
+		}
+		else
+		{
+			sprintf(message, "EPRED %d %d.%s %d.%s\n", this->chave, this->chave, this->address, this->chave, this->port);
+			msg = (char *) malloc (strlen(message)+1);
+			strcpy(msg, message);
+			addr->message=msg;
+		}
+		return addr;
 	}
 	else
 	{
 		hashi = hash(seq);
-		Insert(ht, hashi, atoi(key), NULL);
+		Insert(ht, hashi, seq, addr);
 		sprintf(message, "FND %s %d %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
 	}
 	
 	GenericTCPsend(suc, message);
 
-	return;
+	return NULL;
 }
 
 void RingLeave(Node *this, Node *suc, Node *pred)
@@ -659,14 +787,8 @@ int compareDist(int this, int a, int b, int flag)
 	unsigned int dista, distb;
 	dista = dist(this, a);
 	distb = dist(this, b);
-
-	fprintf(stdout, "%d- %d: %d  %d: %d\n",this , a, dista, b, distb);	
 	
-	if(dista==distb)
-	{
-		fprintf(stdout, "returning 0\n");
-		return 0;
-	}
+	if(dista==distb) return 0;
 	else if(max(dista, distb)==dista)return 1;
 	else if(max(dista, distb)==distb)return -1;
 	else return -2;
