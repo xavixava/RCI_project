@@ -46,8 +46,8 @@ void interface(char **args)
 		exit(1);
 	}
 	
-	address = handle_args(args[2], key);
-	port = handle_args(args[3], key);
+	address = args[2];
+	port = args[3];
 	
 	this = create(chave, address, port); //Saves Node info on Node struct
 	fprintf(stdout, "Node created: %d %s %s\n", this->chave, this->address, this->port);//DELETE LATER
@@ -68,7 +68,7 @@ void interface(char **args)
 		FD_SET(UdpFd,&rfds);	//select will wait for udp message
 		FD_SET(newfd,&rfds);	//select will wait for tcp message from current connection	
 		
-		//fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd);
+		fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd);
 
 		maxfd = max(0, newfd);			//Check which is the max file descriptor so select won´t have to check all fds
 		maxfd = max(maxfd, UdpFd);
@@ -229,9 +229,7 @@ void interface(char **args)
 				{
 					key = info;
 					address = handle_instructions(info);
-					address = handle_args(address, key);
 					port = handle_instructions(address);
-					port = handle_args(port, key);
 					info = newline(port);
 					
 					if(pred->chave!=-1)fprintf(stdout, "Already in ring\n");//ring==1
@@ -254,9 +252,7 @@ void interface(char **args)
 				{
 					key = info;
 					address = handle_instructions(info);
-					address = handle_args(address, key);
 					port = handle_instructions(address);
-					port = handle_args(port, key);
 					info = newline(port);
 
 					if(pred->chave!=-1||suc->chave!=-1)fprintf(stdout, "Already in ring\n");//ring==1
@@ -316,7 +312,7 @@ void interface(char **args)
 						ring=0;
 					}
 				}
-				else if (strcmp(buffer, "m\n") == 0) fprintf(stdout, "%d %d.%s %d.%s\n", this->chave, this->chave, this->address, this->chave, this->port);
+				else if (strcmp(buffer, "m\n") == 0) fprintf(stdout, "%d %s %s\n", this->chave, this->address, this->port);
 				else if ((strcmp(buffer, "exit\n") == 0)||(strcmp(buffer, "e\n") == 0))
 				{
 					freeNode(chord);;
@@ -404,9 +400,7 @@ void interface(char **args)
 						
 						key = info;
 						address = handle_instructions(info);
-						address = handle_args(address, key);
 						port = handle_instructions(address);
-						port = handle_args(port, key);
 						info = newline(port);
 						
 						update(pred, atoi(key), address, port, 0);
@@ -437,31 +431,6 @@ void interface(char **args)
 	}
 	
 	return;
-}
-
-char *handle_args(char *arg, char *key)//searches for the first '.' appearance in a string
-{
-	char *final, *aux, *point=".";
-	
-	aux = strstr(arg, point);
-	final = aux+1;
-	if(aux==NULL)
-	{
-		fprintf(stdout, "Por favor, formate devidamente os argumentos\n");
-		exit(1);
-	}	
-	
-	*aux='\0';
-	
-	//ADICIONAR VERIFICAÇÕES EXTRA, COMO VERIFICAR SE O ENDEREÇO E O PORTO SÃO NÚMEROS E OS SEUS TAMANHOS
-	
-	if(strcmp(arg, key)!=0)
-	{	
-		fprintf(stdout, "Por favor, use a mesma chave em todos os argumentos\n");
-		exit(1);
-	}
-	
-	return final;
 }
 
 char *handle_instructions(char *arg)//searches for the first ' ' appearance in a string
@@ -550,9 +519,7 @@ void PREDrcv(Node *this, Node *suc, Node *pred, char *info) //cria um fd diferen
 	
 	key = info; //transform this into a function later
 	address = handle_instructions(info);
-	address = handle_args(address, key);
 	port = handle_instructions(address);
-	port = handle_args(port, key);
 	chave=atoi(key);
 	key = newline(port);
 					
@@ -586,9 +553,7 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 	key = info;
 	chave = atoi(key);
 	address = handle_instructions(info);
-	address = handle_args(address, key);
 	port = handle_instructions(address);
-	port = handle_args(port, key);
 	key = newline(port);
 	
 	fprintf(stdout, "suc: %d %s %s\n", chave, address, port);
@@ -625,21 +590,19 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred)	//find almost compl
 	seq = handle_instructions(searchee);
 	key = handle_instructions(seq);
 	address = handle_instructions(key);
-	address = handle_args(address, key);
 	port = handle_instructions(address);
-	port = handle_args(port, key);
 	info = newline(port);
 	
 	
 	if(suc->chave==atoi(searchee))
 	{
-		sprintf(message, "RSP %s %s %d %d.%s %d.%s\n", key, seq, suc->chave, suc->chave, suc->address, suc->chave, suc->port);
+		sprintf(message, "RSP %s %s %d %s %s\n", key, seq, suc->chave, suc->address, suc->port);
 	}
 	else if(compareDist(atoi(searchee), this->chave, suc->chave, 0)<=0)
 	{
-		sprintf(message, "RSP %s %s %d %d.%s %d.%s\n", key, seq, this->chave, this->chave, this->address, this->chave, this->port);
+		sprintf(message, "RSP %s %s %d %s %s\n", key, seq, this->chave, this->address, this->port);
 	}
-	else sprintf(message, "FND %s %s %s %s.%s %s.%s\n", searchee, seq, key, key, address, key, port);
+	else sprintf(message, "FND %s %s %s %s %s\n", searchee, seq, key, address, port);
 	
 	GenericTCPsend(suc, message);
 
@@ -657,22 +620,20 @@ void *RSPrecv (char *info, Node *this, Node *suc, Element **ht)
 	seq = handle_instructions(searchee);
 	key = handle_instructions(seq);
 	address = handle_instructions(key);
-	address = handle_args(address, key);
 	port = handle_instructions(address);
-	port = handle_args(port, key);
 	info = newline(port);
 	
 	hashi = hash(atoi(seq));
 	aux = Retrieve_del(ht, hashi, atoi(seq));
 	
 	if(aux==NULL){
-		sprintf(message, "RSP %s %s %s %s.%s %s.%s\n", searchee, seq, key, key, address, key, port);
+		sprintf(message, "RSP %s %s %s %s %s\n", searchee, seq, key, address, port);
 		if(atoi(searchee) == this->chave) fprintf(stdout, "%s", message);
 		else GenericTCPsend(suc, message);
 	}
 	else 
 	{
-		sprintf(message, "EPRED %s %s.%s %s.%s\n", key, key, address, key, port);
+		sprintf(message, "EPRED %s %s %s\n", key, address, port);
 		msg = (char *) malloc (strlen(message)+1);
 		strcpy(msg, message);
 		aux->message=msg;
@@ -693,12 +654,12 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 	{
 		if (addr==NULL)
 		{
-			sprintf(message, "RSP %d %d.%s %d.%s\n", suc->chave, suc->chave, suc->address, suc->chave, suc->port);
+			sprintf(message, "RSP %d %s %s\n", suc->chave, suc->address, suc->port);
 			fprintf(stdout, "%s", message);
 		}
 		else
 		{
-			sprintf(message, "EPRED %d %d.%s %d.%s\n", suc->chave, suc->chave, suc->address, suc->chave, suc->port);
+			sprintf(message, "EPRED %d %s %s\n", suc->chave, suc->address, suc->port);
 			msg = (char *) malloc (strlen(message)+1);
 			strcpy(msg, message);
 			addr->message=msg;
@@ -709,12 +670,12 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 	{
 		if (addr==NULL)
 		{
-			sprintf(message, "RSP %s %d %d %d.%s %d.%s\n", key, seq, pred->chave, pred->chave, pred->address, pred->chave, pred->port);
+			sprintf(message, "RSP %s %d %d %s %s\n", key, seq, pred->chave, pred->address, pred->port);
 			fprintf(stdout, "%s", message);
 		}
 		else
 		{
-			sprintf(message, "EPRED %d %d.%s %d.%s\n", pred->chave, pred->chave, pred->address, pred->chave, pred->port);
+			sprintf(message, "EPRED %d %s %s\n", pred->chave, pred->address, pred->port);
 			msg = (char *) malloc (strlen(message)+1);
 			strcpy(msg, message);
 			addr->message=msg;

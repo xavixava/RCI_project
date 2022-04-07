@@ -76,7 +76,7 @@ int selfInform(Node *pred, Node *this)
 	
 	memset(message, '\0', sizeof(message));
 	
-	sprintf(message, "SELF %d %d.%s %d.%s\n", this->chave, this->chave, this->address, this->chave, this-> port);
+	sprintf(message, "SELF %d %s %s\n", this->chave, this->address, this-> port);
 	
 	fprintf(stdout, "sending: %s", message);
 	fprintf(stdout, "to: %d %s %s\n", pred->chave, pred->address, pred->port);
@@ -131,7 +131,7 @@ int predInform(Node *suc, Node *old_suc)
 	
 	memset(message, '\0', sizeof(message));
 	
-	sprintf(message, "PRED %d %d.%s %d.%s\n", suc->chave, suc->chave, suc->address, suc->chave, suc-> port);
+	sprintf(message, "PRED %d %s %s\n", suc->chave, suc->address, suc-> port);
 	
 	fprintf(stdout, "sending: %s", message);
 	fprintf(stdout, "to: %d %s %s through %d\n",  old_suc->chave, old_suc->address, old_suc->port, old_suc->fd);
