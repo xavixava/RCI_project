@@ -30,6 +30,9 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred);
 void* fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, struct Save *addr);
 void RingLeave(Node *this, Node *suc, Node *pred);
 
+int verifyPort(char *port);
+int verifyAddr(char *addr);
+
 int compareDist(int this, int a, int b, int flag);
 unsigned int dist(int this, int measuree);
 

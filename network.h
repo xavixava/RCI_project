@@ -17,7 +17,6 @@ int CreateUdpServer(char *port);
 int selfInform(Node *pred, Node *this);
 int predInform(Node *suc, Node *old_suc);
 int GenericUDPsend(Node *receiver, char *message);
-
 void GenericTCPsend(Node *suc, char *message);
 
 #endif

@@ -35,7 +35,6 @@ int CreateTcpServer(char *port)
 		fprintf(stderr, "tcp listen: %s\n", strerror(errno));
 		exit(1);
 	};
-	fprintf(stdout, "listening\n");
 	
 	return fd;
 }
@@ -60,9 +59,7 @@ int CreateUdpServer(char *port)
 	{
 		fprintf(stderr, "%s\n", strerror(errno));
 		exit(1);
-	};
-	
-	fprintf(stdout, "udp socket binded\n");
+	}
 	
 	return fd;
 }
@@ -78,8 +75,8 @@ int selfInform(Node *pred, Node *this)
 	
 	sprintf(message, "SELF %d %s %s\n", this->chave, this->address, this-> port);
 	
-	fprintf(stdout, "sending: %s", message);
-	fprintf(stdout, "to: %d %s %s\n", pred->chave, pred->address, pred->port);
+	fprintf(stdout, "\tsending: %s", message);
+	fprintf(stdout, "\tto: %d %s %s\n", pred->chave, pred->address, pred->port);
 	
 	if(pred->fd!=0)fd=pred->fd;
 	else
@@ -133,8 +130,8 @@ int predInform(Node *suc, Node *old_suc)
 	
 	sprintf(message, "PRED %d %s %s\n", suc->chave, suc->address, suc-> port);
 	
-	fprintf(stdout, "sending: %s", message);
-	fprintf(stdout, "to: %d %s %s through %d\n",  old_suc->chave, old_suc->address, old_suc->port, old_suc->fd);
+	fprintf(stdout, "\tsending: %s", message);
+	fprintf(stdout, "\tto: %d %s %s through %d\n",  old_suc->chave, old_suc->address, old_suc->port, old_suc->fd);
 	
 	if(old_suc->fd!=0)fd=old_suc->fd;
 	else
@@ -186,8 +183,8 @@ void GenericTCPsend(Node *suc, char *message)
 	ssize_t n;
 	struct addrinfo hints, *res;
 	
-	fprintf(stdout, "sending: %s", message);
-	fprintf(stdout, "to: %d %s %s\n", suc->chave, suc->address, suc->port);
+	fprintf(stdout, "\tsending: %s", message);
+	fprintf(stdout, "\tto: %d %s %s\n", suc->chave, suc->address, suc->port);
 	
 	if(suc->fd!=0)(fd=suc->fd);
 	else

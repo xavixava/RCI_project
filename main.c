@@ -21,6 +21,10 @@ int main(int argc, char**argv)
 		exit(1);
 	}
 	
+	system("clear");
+	fprintf(stdout, "\n\t\tWelcome to Marta Bezerra & Xavier Antunes network\t\n");
+	fprintf(stdout, "\t\t                (press h for help)                 \t\n");
+	
 	interface(argv);
 	
 	return 0;
