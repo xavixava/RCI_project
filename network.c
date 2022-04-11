@@ -75,7 +75,7 @@ int selfInform(Node *pred, Node *this)
 	
 	sprintf(message, "SELF %d %s %s\n", this->chave, this->address, this-> port);
 	
-	fprintf(stdout, "\tsending: %s", message);
+	fprintf(stdout, "\n\tsending: %s", message);
 	fprintf(stdout, "\tto: %d %s %s\n", pred->chave, pred->address, pred->port);
 	
 	if(pred->fd!=0)fd=pred->fd;
@@ -130,7 +130,7 @@ int predInform(Node *suc, Node *old_suc)
 	
 	sprintf(message, "PRED %d %s %s\n", suc->chave, suc->address, suc-> port);
 	
-	fprintf(stdout, "\tsending: %s", message);
+	fprintf(stdout, "\n\tsending: %s", message);
 	fprintf(stdout, "\tto: %d %s %s through %d\n",  old_suc->chave, old_suc->address, old_suc->port, old_suc->fd);
 	
 	if(old_suc->fd!=0)fd=old_suc->fd;
@@ -162,7 +162,7 @@ int predInform(Node *suc, Node *old_suc)
 		}
 		freeaddrinfo(res);
 	}
-	fprintf(stdout, "%d\n", fd);
+	
 	n = write(fd, message, strlen(message));
 	if(n==-1)
 	{
@@ -183,7 +183,7 @@ void GenericTCPsend(Node *suc, char *message)
 	ssize_t n;
 	struct addrinfo hints, *res;
 	
-	fprintf(stdout, "\tsending: %s", message);
+	fprintf(stdout, "\n\tsending: %s", message);
 	fprintf(stdout, "\tto: %d %s %s\n", suc->chave, suc->address, suc->port);
 	
 	if(suc->fd!=0)(fd=suc->fd);
@@ -222,8 +222,6 @@ void GenericTCPsend(Node *suc, char *message)
 		exit(1);
 	}
 	
-	fprintf(stdout, "sent\n");
-	
 	//close(fd);
 
 	return;
@@ -235,11 +233,9 @@ int GenericUDPsend(Node *receiver, char *message)
 	
 	int fd, errcode;
 	ssize_t n;
-	socklen_t addrlen;
 	struct addrinfo hints, *res;
-	struct sockaddr_in addr;
 	
-	fprintf(stdout, "%s", message);
+	fprintf(stdout, "\n\t%s\n", message);
 	
 	fd = socket(AF_INET, SOCK_DGRAM, 0); //socket udp
 	if(fd==-1) 

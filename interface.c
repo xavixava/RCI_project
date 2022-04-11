@@ -307,7 +307,16 @@ void interface(char **args)
 							sprintf(message, "EFND %d", this->chave);
 						
 							tv.tv_sec = 1;
-						
+							
+							if(UdpFd!=0)
+							{
+								n = close(UdpFd);
+								if(n==-1)
+								{
+									fprintf(stderr, "%s\n", strerror(errno));
+									exit(1);
+								}
+							}
 							UdpFd = GenericUDPsend(aux, message); //atenção, ele pode aqui ficar bloqueado à espera do ACK, pois ainda não foram criados outros sockets
 						
 							bent=1;
@@ -408,10 +417,8 @@ void interface(char **args)
 				}
 				
 				fprintf(stdout, "\tReceived: %s", Buffer);
-				/*write(1, "received: ", 10);
-				write(1, Buffer, n);*/
-				fprintf(stdout, "via udp\n");
 				
+				fprintf(stdout, " via udp\n");
 				
 				if(strcmp(Buffer, "ACK")==0) ack=0;
 				else 
@@ -444,7 +451,6 @@ void interface(char **args)
 					}
 					else if(strcmp(Buffer, "EPRED")==0)
 					{
-						fprintf(stdout, "received: %s - via udp\n", Buffer);
 						bent = 0;
 						
 						key = info;
@@ -453,7 +459,7 @@ void interface(char **args)
 						info = newline(port);
 						
 						update(pred, atoi(key), address, port, 0);
-						fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
+						//fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
 						
 						n = close(UdpFd);
 						if(n==-1)
@@ -462,7 +468,7 @@ void interface(char **args)
 							exit(1);
 						}
 						
-						TcpFd = CreateTcpServer(this->port);
+						if(TcpFd == 0)TcpFd = CreateTcpServer(this->port);
 						UdpFd = CreateUdpServer(this->port);
 
 						fprintf(stdout, "Sockets created\n");
@@ -530,7 +536,7 @@ void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int
 	char *aux, *info;
 	void *fun_aux=NULL;
 	
-	fprintf(stdout, "\nReceived: %s\n", Buffer);
+	fprintf(stdout, "\n\tReceived: %s\n", Buffer);
 	aux = newline(Buffer);
 	
 	while(aux!=NULL)
@@ -772,7 +778,7 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 		}
 		else
 		{
-			sprintf(message, "EPRED %d %s %s\n", suc->chave, suc->address, suc->port);
+			sprintf(message, "EPRED %d %s %s", suc->chave, suc->address, suc->port);
 			msg = (char *) malloc (strlen(message)+1);
 			strcpy(msg, message);
 			addr->message=msg;
@@ -788,7 +794,7 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 		}
 		else
 		{
-			sprintf(message, "EPRED %d %s %s\n", pred->chave, pred->address, pred->port);
+			sprintf(message, "EPRED %d %s %s", pred->chave, pred->address, pred->port);
 			msg = (char *) malloc (strlen(message)+1);
 			strcpy(msg, message);
 			addr->message=msg;
@@ -804,7 +810,7 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 		}
 		else
 		{
-			sprintf(message, "EPRED %d %s %s\n", this->chave, this->address, this->port);
+			sprintf(message, "EPRED %d %s %s", this->chave, this->address, this->port);
 			msg = (char *) malloc (strlen(message)+1);
 			strcpy(msg, message);
 			addr->message=msg;
