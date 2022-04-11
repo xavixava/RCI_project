@@ -111,8 +111,6 @@ void interface(char **args)
 					exit(1);
 				}; //check if it will try to connect with more than one tcp socket at once
 				
-				fprintf(stdout, "Accepted connection\n");
-				
 				FD_SET(newfd,&rfds);	//making sure select knows that now it will have to check for a new fd(newfd - tcp socket)
 				
 				counter--;
@@ -273,7 +271,7 @@ void interface(char **args)
 							else
 							{
 								update(pred, atoi(key), address, port, 0);
-								fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
+								//fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
 			
 								if(TcpFd==0)TcpFd = CreateTcpServer(this->port);
 								if(UdpFd==0)UdpFd = CreateUdpServer(this->port);
@@ -298,11 +296,12 @@ void interface(char **args)
 					if(pred->chave!=-1 || suc->chave!=-1)fprintf(stdout, "\tAlready in ring\n");//ring==1
 					else
 					{
-						if(address!=NULL && port !=NULL)
+						if(address == NULL && port ==NULL)fprintf(stdout, "Instrução mal formatada(Endereço ou porto mal formatado)");
+						else
 						{
 							aux=create(atoi(key), address, port);
 						
-							fprintf(stdout, "Bentry: %d %s %s\n", aux->chave, aux->address, aux->port);
+							//fprintf(stdout, "Bentry: %d %s %s\n", aux->chave, aux->address, aux->port);
 				
 							sprintf(message, "EFND %d", this->chave);
 						
