@@ -236,6 +236,7 @@ int GenericUDPsend(Node *receiver, char *message)
 	struct addrinfo hints, *res;
 	
 	fprintf(stdout, "\n\t%s\n", message);
+	fprintf(stdout, "\tto: %d %s %s\n", receiver->chave, receiver->address, receiver->port);
 	
 	fd = socket(AF_INET, SOCK_DGRAM, 0); //socket udp
 	if(fd==-1) 

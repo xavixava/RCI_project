@@ -22,7 +22,7 @@ void interface(char **args)
 	fd_set rfds;
 	struct timeval tv;
 	
-	tv.tv_sec = 30;
+	tv.tv_sec = 300;
 	tv.tv_usec = 0;
 		
 	memset(buffer, '\0', 64); //clear buffer
@@ -56,6 +56,7 @@ void interface(char **args)
 		exit(1);
 	}
 	
+	memset(message, '\0', 32);
 	
 	this = create(chave, address, port); //Saves Node info on Node struct
 	fprintf(stdout, "Node created: %d %s %s\n", this->chave, this->address, this->port);//DELETE LATER
@@ -75,14 +76,16 @@ void interface(char **args)
 		FD_SET(suc->fd,&rfds);		//select will wait for tcp connection
 		FD_SET(UdpFd,&rfds);	//select will wait for udp message
 		FD_SET(newfd,&rfds);	//select will wait for tcp message from current connection	
+		if(ack>1)FD_SET(ack, &rfds);
 		
-		//fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd);
+		fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d ack:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd, ack);
 
 		maxfd = max(0, newfd);			//Check which is the max file descriptor so select won´t have to check all fds
 		maxfd = max(maxfd, UdpFd);
 		maxfd = max(maxfd, TcpFd);
 		maxfd = max(maxfd, pred->fd);
 		maxfd = max(maxfd, suc->fd);
+		if(ack>1)maxfd = max(maxfd, ack);
 		
 		counter = 0;
 		
@@ -94,7 +97,17 @@ void interface(char **args)
 		exit(1);
 		}
 		else if (counter == 0){
-			if (ack==1)fprintf(stdout, "did not receive ACK, please try another node\n");
+			if (ack>=1)
+			{
+				if(message[0]!='\0')
+				{
+					fprintf(stdout, "did not receive ACK, sending via tcp\n");
+					GenericTCPsend(suc, message);
+					memset(message, '\0', 32);
+					}
+				else fprintf(stdout, "did not receive ACK, please try another node\n");
+				ack = 0;
+			}
 			else if(bent==1)fprintf(stdout, "did not receive bent, please try another node\n");
 			else fprintf(stdout, "Please write something\n");	//timeout ocurred
 			tv.tv_sec = 300;
@@ -142,7 +155,7 @@ void interface(char **args)
 					}
 					else
 					{
-						aux_addr = TcpRead(this, suc, pred, Buffer, buffer, pred->fd, ht);
+						aux_addr = TcpRead(this, suc, pred, Buffer, buffer, pred->fd, ht, chord, message, &ack);
 					
 						memset(Buffer, '\0', 257);
 					}
@@ -176,7 +189,7 @@ void interface(char **args)
 						ring=0;
 					}
 					else{
-						aux_addr = TcpRead(this, suc, pred, Buffer, buffer, suc->fd, ht);
+						aux_addr = TcpRead(this, suc, pred, Buffer, buffer, suc->fd, ht, chord, message, &ack);
 					
 						memset(Buffer, '\0', 257);
 					}
@@ -209,7 +222,7 @@ void interface(char **args)
 					}
 					else
 					{
-					aux_addr = TcpRead(this, suc, pred, Buffer, buffer, newfd, ht);
+					aux_addr = TcpRead(this, suc, pred, Buffer, buffer, newfd, ht, chord, message, &ack);
 					
 					newfd=0;
 					
@@ -317,7 +330,9 @@ void interface(char **args)
 								}
 							}
 							UdpFd = GenericUDPsend(aux, message); //atenção, ele pode aqui ficar bloqueado à espera do ACK, pois ainda não foram criados outros sockets
-						
+							
+							memset(message, '\0', 32);
+							
 							bent=1;
 							ack=1;
 						
@@ -327,7 +342,7 @@ void interface(char **args)
 				}
 				else if((strcmp(buffer, "find") == 0)||(strcmp(buffer, "f") == 0))
 				{
-					if (ring==1)fnd(info, this, suc, pred, seq, ht, NULL);
+					if (ring==1)fnd(info, this, suc, pred, seq, ht, NULL, chord, message, &ack);
 					else fprintf(stdout, "\tNot in ring!\n");
 					seq = (seq + 1) % 100;
 				}
@@ -383,6 +398,21 @@ void interface(char **args)
 					fprintf(stdout, "exit(e) -> exit application   clear -> clear terminal window\n");
 					fprintf(stdout, "========================================================================================================================\n\n");
 					}
+				else if(strcmp(buffer, "chord")==0 || strcmp(buffer, "c")==0)
+				{
+					key = info;
+                    address = handle_instructions(info);
+					port = handle_instructions(address);
+					i=verifyAddr(address);
+					if(i) i=verifyPort(port);
+					if(i)
+					{
+						
+						info = newline(port);
+						update(chord, atoi(key), address, port, 0);
+					}
+				}
+				else if(strcmp(buffer, "dchord")==0 || strcmp(buffer, "d")==0) update(chord, -1, NULL, NULL, 0);
 				else fprintf(stdout, "\tComando Desconhecido ou ainda não implementado\n\tPress h for help\n");
 			
 				counter--;
@@ -405,10 +435,24 @@ void interface(char **args)
 				}
 				ack = 1;
 			}
-			if(FD_ISSET(UdpFd,&rfds)){ //something written in udp socket
+			if(FD_ISSET(ack,&rfds) && ack > 1)
+			{
+				n = recvfrom(ack, Buffer, 64, 0, (struct sockaddr *)&addr, &addrlen);
+				if(strcmp(Buffer, "ack")==0)
+				{
+					n=close(ack);
+					if(n==-1)
+					{
+						fprintf(stderr, "%s\n", strerror(errno));
+						exit(1);
+					} 
+					ack = 0;
+				}
+			}
+			if(FD_ISSET(UdpFd,&rfds) && UdpFd!=0){ //something written in udp socket
 				FD_CLR(UdpFd,&rfds);
 				
-				n = recvfrom(UdpFd, Buffer, 64, 0, (struct sockaddr *)&addr, &addrlen);
+				n = recvfrom(UdpFd, Buffer, 256, 0, (struct sockaddr *)&addr, &addrlen);
 				if(n==-1)
 				{
 					fprintf(stderr, "%s\n", strerror(errno));
@@ -435,7 +479,7 @@ void interface(char **args)
 					{ 
 						aux_addr = (Save *) malloc(sizeof(Save));
 						aux_addr->addr=addr;
-						aux_addr = fnd(info, this, suc, pred, seq, ht, aux_addr);
+						aux_addr = fnd(info, this, suc, pred, seq, ht, aux_addr, chord, message, &ack);
 						seq = (seq + 1) % 100;
 						if(aux_addr!=NULL)
 						{
@@ -476,15 +520,28 @@ void interface(char **args)
 						
 						ring = 1;
 					}
-					else if(strcmp(Buffer, "FND")==0) fprintf(stdout, "FND\n");
-					else if(strcmp(Buffer, "RSP")==0) fprintf(stdout, "RSP\n");
+					else if(strcmp(Buffer, "FND")==0) FNDrecv(info, this, suc, pred, chord,  message, &ack);
+					else if(strcmp(Buffer, "RSP")==0)
+					{
+						aux_addr = RSPrecv(info, this, suc, ht, chord, message, &ack);
+						if(aux_addr!=NULL)
+						{
+							n = sendto(UdpFd, aux_addr->message, strlen(aux_addr->message), 0, (struct sockaddr *)&addr, addrlen);
+							if(n==-1)
+							{
+								fprintf(stderr, "%s\n", strerror(errno));
+								exit(1);
+							}
+							ack = 1;
+						}
+					}
 				}
 				
 				counter--;
 				memset(Buffer, '\0', 257);
 			}
 		if(bent==0&&ack==0)tv.tv_sec = 300;
-		else tv.tv_sec=1;
+		else tv.tv_sec = 1;
 		if(aux_addr!=NULL)
 		{
 			free(aux_addr->message);
@@ -530,7 +587,7 @@ char *newline(char *arg)//searches for the first newline appearance in a string
 	else return aux;
 }
 
-void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd, Element **ht)
+void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd, Element **ht, Node *chord, char *m, int *ack)
 {
 	char *aux, *info;
 	void *fun_aux=NULL;
@@ -545,10 +602,12 @@ void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int
 		else strcpy(buffer, Buffer);
 	
 		info = handle_instructions(buffer);
+		
+		fprintf(stdout, "buffer: %s in tcpread", buffer);
 	
 		if(strcmp("SELF", buffer)==0) SelfRcv(this, suc, pred, fd, info); //Received SELF message
-		else if(strcmp("FND", buffer)==0) FNDrecv(info, this, suc, pred);
-		else if(strcmp("RSP", buffer)==0) fun_aux = RSPrecv(info, this, suc, ht);
+		else if(strcmp("FND", buffer)==0) FNDrecv(info, this, suc, pred, chord, m, ack);
+		else if(strcmp("RSP", buffer)==0) fun_aux = RSPrecv(info, this, suc, ht, chord, m, ack);
 		else if(strcmp("PRED", buffer)==0) PREDrcv(this, suc, pred, info); //Received PRED message
 		
 		Buffer = aux;
@@ -674,10 +733,12 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 	return;
 }
 
-void FNDrecv (char *info, Node *this, Node *suc, Node *pred)	//find almost completed, lacks case with only 2 nodes and 1 node
+void FNDrecv (char *info, Node *this, Node *suc, Node *pred, Node *chord, char *m, int *ack)	//find almost completed, lacks case with only 2 nodes and 1 node
 {
 	char message[64], *searchee, *seq, *key, *address, *port;
 	int n = 0;
+	
+	fprintf(stdout, "meio mal\n");
 	
 	searchee = info;
 	seq = handle_instructions(searchee);
@@ -709,13 +770,18 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred)	//find almost compl
 	}
 	else sprintf(message, "FND %s %s %s %s %s\n", searchee, seq, key, address, port);
 	
-	GenericTCPsend(suc, message);
+	if(chord->chave>-1 && dist(atoi(searchee), suc->chave) > dist(atoi(searchee), chord->chave) && *m=='\0')
+	{
+		*ack = GenericUDPsend(chord, message);
+		strcpy(m, message);
+	}
+	else GenericTCPsend(suc, message);
 
 	return;
 	
 }
 
-void *RSPrecv (char *info, Node *this, Node *suc, Element **ht)
+void *RSPrecv (char *info, Node *this, Node *suc, Element **ht, Node *chord, char *m, int *ack)
 {
 	Save *aux;
 	char message[64], *searchee, *seq, *key, *address, *port, *msg;
@@ -747,7 +813,15 @@ void *RSPrecv (char *info, Node *this, Node *suc, Element **ht)
 	if(aux==NULL){
 		sprintf(message, "RSP %s %s %s %s %s\n", searchee, seq, key, address, port);
 		if(atoi(searchee) == this->chave) fprintf(stdout, "%s", message);
-		else GenericTCPsend(suc, message);
+		else {
+			if(chord->chave>-1 && dist(atoi(searchee), suc->chave) > dist(atoi(searchee), chord->chave) && *m=='\0')
+			{
+				*ack=GenericUDPsend(chord, message);
+				strcpy(m, message);
+				
+			}
+			else GenericTCPsend(suc, message);
+		}
 	}
 	else 
 	{
@@ -759,7 +833,8 @@ void *RSPrecv (char *info, Node *this, Node *suc, Element **ht)
 	return aux;
 }
 
-void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, Save *addr)
+
+void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, Save *addr, Node *chord, char *m, int *ack)
 {
 	char message[64], *key=info, *msg;
 	unsigned int hashi;
@@ -823,7 +898,12 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 		sprintf(message, "FND %s %d %d %s %s\n", key, seq, this->chave, this->address, this->port);
 	}
 	
-	GenericTCPsend(suc, message);
+	if(chord->chave>-1 && dist(atoi(key), suc->chave) > dist(atoi(key), chord->chave) && m[0]=='\0') 
+	{
+		*ack=GenericUDPsend(chord, message);
+		strcpy(m, message);
+	}
+	else GenericTCPsend(suc, message);
 
 	return NULL;
 }
