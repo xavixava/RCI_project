@@ -438,8 +438,9 @@ void interface(char **args)
 			if(FD_ISSET(ack,&rfds) && ack > 1)
 			{
 				n = recvfrom(ack, Buffer, 64, 0, (struct sockaddr *)&addr, &addrlen);
-				if(strcmp(Buffer, "ack")==0)
+				if(strcmp(Buffer, "ACK")==0)
 				{
+					fprintf(stdout, "\tReceived: ACK\n");
 					n=close(ack);
 					if(n==-1)
 					{
@@ -603,8 +604,6 @@ void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int
 	
 		info = handle_instructions(buffer);
 		
-		fprintf(stdout, "buffer: %s in tcpread", buffer);
-	
 		if(strcmp("SELF", buffer)==0) SelfRcv(this, suc, pred, fd, info); //Received SELF message
 		else if(strcmp("FND", buffer)==0) FNDrecv(info, this, suc, pred, chord, m, ack);
 		else if(strcmp("RSP", buffer)==0) fun_aux = RSPrecv(info, this, suc, ht, chord, m, ack);
@@ -737,8 +736,6 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred, Node *chord, char *
 {
 	char message[64], *searchee, *seq, *key, *address, *port;
 	int n = 0;
-	
-	fprintf(stdout, "meio mal\n");
 	
 	searchee = info;
 	seq = handle_instructions(searchee);
