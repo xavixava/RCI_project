@@ -170,8 +170,6 @@ int predInform(Node *suc, Node *old_suc)
 		exit(1);
 	}
 	
-	fprintf(stdout, "sent\n");
-	
 	//close(fd);
 
 	return fd;
@@ -235,8 +233,8 @@ int GenericUDPsend(Node *receiver, char *message)
 	ssize_t n;
 	struct addrinfo hints, *res;
 	
-	fprintf(stdout, "\n\t%s\n", message);
-	fprintf(stdout, "\tto: %d %s %s\n", receiver->chave, receiver->address, receiver->port);
+	fprintf(stdout, "\n\tSending: %s", message);
+	fprintf(stdout, "\tto: %d %s %s via udp\n", receiver->chave, receiver->address, receiver->port);
 	
 	fd = socket(AF_INET, SOCK_DGRAM, 0); //socket udp
 	if(fd==-1) 

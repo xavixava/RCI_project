@@ -59,7 +59,7 @@ void interface(char **args)
 	memset(message, '\0', 32);
 	
 	this = create(chave, address, port); //Saves Node info on Node struct
-	fprintf(stdout, "Node created: %d %s %s\n", this->chave, this->address, this->port);//DELETE LATER
+	//fprintf(stdout, "Node created: %d %s %s\n", this->chave, this->address, this->port);//DELETE LATER
 	
 	suc = create(-1, NULL, NULL);
 	pred = create(-1, NULL, NULL);
@@ -78,7 +78,7 @@ void interface(char **args)
 		FD_SET(newfd,&rfds);	//select will wait for tcp message from current connection	
 		if(ack>1)FD_SET(ack, &rfds);
 		
-		fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d ack:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd, ack);
+		//fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d ack:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd, ack);
 
 		maxfd = max(0, newfd);			//Check which is the max file descriptor so select won´t have to check all fds
 		maxfd = max(maxfd, UdpFd);
@@ -113,7 +113,8 @@ void interface(char **args)
 			tv.tv_sec = 300;
 			bent=0;
 		}
-			if(TcpFd!=0 && FD_ISSET(TcpFd,&rfds)){		//New tcp connection
+			if(TcpFd!=0 && FD_ISSET(TcpFd,&rfds))
+			{		//New tcp connection
 				FD_CLR(TcpFd,&rfds);
 				
 				//if((newfd=accept(TcpFd,(struct sockaddr*)&addr,&addrlen))==-1)
@@ -148,8 +149,8 @@ void interface(char **args)
 							fprintf(stderr, "%s\n", strerror(errno));
 							exit(1);
 						}
-						update(pred, -1, NULL, NULL, 0);
 						if(pred->chave==suc->chave) update(suc, -1, NULL, NULL, 0);
+						update(pred, -1, NULL, NULL, 0);
 						fprintf(stdout, "\tClosed pred connection! Exiting ring...\n");
 						ring=0;
 					}
@@ -412,7 +413,7 @@ void interface(char **args)
 						update(chord, atoi(key), address, port, 0);
 					}
 				}
-				else if(strcmp(buffer, "dchord")==0 || strcmp(buffer, "d")==0) update(chord, -1, NULL, NULL, 0);
+				else if(strcmp(buffer, "dchord\n")==0 || strcmp(buffer, "d\n")==0) update(chord, -1, NULL, NULL, 0);
 				else fprintf(stdout, "\tComando Desconhecido ou ainda não implementado\n\tPress h for help\n");
 			
 				counter--;
@@ -437,6 +438,7 @@ void interface(char **args)
 			}
 			if(FD_ISSET(ack,&rfds) && ack > 1)
 			{
+				FD_CLR(ack,&rfds);
 				n = recvfrom(ack, Buffer, 64, 0, (struct sockaddr *)&addr, &addrlen);
 				if(strcmp(Buffer, "ACK")==0)
 				{
@@ -561,7 +563,7 @@ char *handle_instructions(char *arg)//searches for the first ' ' appearance in a
 	aux = strstr(arg, space);
 	
 	
-	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0 && strcmp(arg, "exit\n")!=0 && strcmp(arg, "e\n")!=0 && strcmp(arg, "clear\n")!=0 && strcmp(arg, "m\n")!=0 && strcmp(arg, "h\n")!=0)
+	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0 && strcmp(arg, "exit\n")!=0 && strcmp(arg, "e\n")!=0 && strcmp(arg, "clear\n")!=0 && strcmp(arg, "m\n")!=0 && strcmp(arg, "h\n")!=0 && strcmp(arg, "dchord\n")!=0 && strcmp(arg, "d\n")!=0 )
 		{
 			fprintf(stdout, "%s", arg);
 			fprintf(stdout, "\t***Mensagem Mal formatada***\n");
@@ -769,6 +771,7 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred, Node *chord, char *
 	
 	if(chord->chave>-1 && dist(atoi(searchee), suc->chave) > dist(atoi(searchee), chord->chave) && *m=='\0')
 	{
+		info = newline(message); 
 		*ack = GenericUDPsend(chord, message);
 		strcpy(m, message);
 	}
@@ -813,6 +816,7 @@ void *RSPrecv (char *info, Node *this, Node *suc, Element **ht, Node *chord, cha
 		else {
 			if(chord->chave>-1 && dist(atoi(searchee), suc->chave) > dist(atoi(searchee), chord->chave) && *m=='\0')
 			{
+				info = newline(message);
 				*ack=GenericUDPsend(chord, message);
 				strcpy(m, message);
 				
@@ -897,6 +901,7 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 	
 	if(chord->chave>-1 && dist(atoi(key), suc->chave) > dist(atoi(key), chord->chave) && m[0]=='\0') 
 	{
+		info = newline(message);
 		*ack=GenericUDPsend(chord, message);
 		strcpy(m, message);
 	}
