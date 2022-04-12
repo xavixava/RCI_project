@@ -1,14 +1,18 @@
 //interface.c
 
-//AS LIGAÇÕES ENTRE OS PREDS E SUCS SÃO PERMANENTES, CORRIGIR ISSO
-
 #include "interface.h"
 
 #define max(A,B) ((A)>=(B)?(A):(B))
 
 //extern Node *this=NULL, *suc=NULL, *pred=NULL, *chord=NULL; //descobrir o porquê do warning, ficaria mais fácil assim
 
-void interface(char **args)
+/*
+*	this function handles the whole interface part of the project,
+*	knows when to do and what to print whenever someone writes to the node or when the user writes something
+*	This function has the select embedded in it(maybe it should've been main)
+*/
+
+void interface(char **args) 
 {
 	char buffer[64], Buffer[257], *key, *address, *port, *info, message[32];
 	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0, seq, bent=0, ack=0;
@@ -16,7 +20,7 @@ void interface(char **args)
 	int i=0;
 	Node *this, *suc=NULL, *pred=NULL, *chord=NULL, *aux=NULL;
 	struct sockaddr_in addr;
-	Save *aux_addr=NULL;
+	Save *aux_addr=NULL;	//this struct will be saved on the hashtable and will contain the address of node to EPRED and the message it needs to send
 	socklen_t addrlen;
 	ssize_t n;
 	fd_set rfds;
@@ -28,9 +32,9 @@ void interface(char **args)
 	memset(buffer, '\0', 64); //clear buffer
 	memset(Buffer, '\0', 257); //clear buffer
 	 
-	seq = rand() % 100;
+	seq = rand() % 100;	//sequence number
 	 
-	ht = CreateHashtable();
+	ht = CreateHashtable(); //this hashtable will later be used to store seq numbers and to know what to do when u receive a find with that seq number
 	 
 	key = args[1];
 	chave = atoi(key);
@@ -56,12 +60,12 @@ void interface(char **args)
 		exit(1);
 	}
 	
-	memset(message, '\0', 32);
+	memset(message, '\0', 32); //will be used to re-send messages if lost in find sent via udp
 	
 	this = create(chave, address, port); //Saves Node info on Node struct
 	//fprintf(stdout, "Node created: %d %s %s\n", this->chave, this->address, this->port);//DELETE LATER
 	
-	suc = create(-1, NULL, NULL);
+	suc = create(-1, NULL, NULL);	//leaves this empty
 	pred = create(-1, NULL, NULL);
 	chord = create(-1, NULL, NULL);
 	
@@ -76,7 +80,7 @@ void interface(char **args)
 		FD_SET(suc->fd,&rfds);		//select will wait for tcp connection
 		FD_SET(UdpFd,&rfds);	//select will wait for udp message
 		FD_SET(newfd,&rfds);	//select will wait for tcp message from current connection	
-		if(ack>1)FD_SET(ack, &rfds);
+		if(ack>1)FD_SET(ack, &rfds); //if ack > 1 then we´re waiting for an ack from chord
 		
 		//fprintf(stdout, "tcp: %d udp: %d newfd: %d pred: %d suc:%d ack:%d\n", TcpFd, UdpFd, newfd, pred->fd, suc->fd, ack);
 
@@ -96,19 +100,19 @@ void interface(char **args)
 		fprintf(stderr, "Select: %s\n", strerror(errno));
 		exit(1);
 		}
-		else if (counter == 0){
+		else if (counter == 0){ //timeout ocurred
 			if (ack>=1)
 			{
-				if(message[0]!='\0')
+				if(message[0]!='\0')//it's waiting for ack from chord
 				{
 					fprintf(stdout, "did not receive ACK, sending via tcp\n");
 					GenericTCPsend(suc, message);
 					memset(message, '\0', 32);
 					}
-				else fprintf(stdout, "did not receive ACK, please try another node\n");
+				else fprintf(stdout, "did not receive ACK, please try another node\n"); //ack==1, waiting for ack from bentry
 				ack = 0;
 			}
-			else if(bent==1)fprintf(stdout, "did not receive bent, please try another node\n");
+			else if(bent==1)fprintf(stdout, "did not receive bent, please try another node\n"); //in this case bentry failed so we're asking for the user to retry entry
 			else fprintf(stdout, "Please write something\n");	//timeout ocurred
 			tv.tv_sec = 300;
 			bent=0;
@@ -117,11 +121,9 @@ void interface(char **args)
 			{		//New tcp connection
 				FD_CLR(TcpFd,&rfds);
 				
-				//if((newfd=accept(TcpFd,(struct sockaddr*)&addr,&addrlen))==-1)
 				if((newfd=accept(TcpFd, NULL, NULL))==-1)
 				{
-					fprintf(stdout, "Error in accept: ");
-					fprintf(stderr, "%s\n", strerror(errno));
+					fprintf(stderr, "Accept: %s\n", strerror(errno));
 					exit(1);
 				}; //check if it will try to connect with more than one tcp socket at once
 				
@@ -141,7 +143,7 @@ void interface(char **args)
 						fprintf(stderr, "%s\n", strerror(errno));
 						exit(1);
 					}
-					else if (n==0)
+					else if (n==0)// closed pred closed connection
 					{
 						n=close(pred->fd);
 						if(n==-1)
@@ -156,15 +158,15 @@ void interface(char **args)
 					}
 					else
 					{
-						aux_addr = TcpRead(this, suc, pred, Buffer, buffer, pred->fd, ht, chord, message, &ack);
+						aux_addr = TcpRead(this, suc, pred, Buffer, buffer, pred->fd, ht, chord, message, &ack); //read variable def comment
 					
 						memset(Buffer, '\0', 257);
 					}
-				}while(*buffer!='\0');
+				}while(*buffer!='\0'); //if buffer wasn't big enough for messages will keep reading and concatenate on smaller buffer
 				memset(buffer, '\0', 64);
 				counter--;		
 			}
-			if(suc->fd!=0 && FD_ISSET(suc->fd,&rfds) && suc->fd!=pred->fd)
+			if(suc->fd!=0 && FD_ISSET(suc->fd,&rfds) && suc->fd!=pred->fd) //will do exactly the same as pred->fd, but from successor
 			{
 				FD_CLR(suc->fd,&rfds);
 				
@@ -198,8 +200,8 @@ void interface(char **args)
 				memset(buffer, '\0', 64);
 				counter--;		
 			} 
-			if(newfd != 0 && FD_ISSET(newfd, &rfds))//something written in accepted tcp socket
-			{ 
+			if(newfd != 0 && FD_ISSET(newfd, &rfds))//something written in accepted tcp socket, will do the same as the 2 previous ones with one little tweak
+			{ 										// TcpRead will understand if newfd belongs to a new predecessor/successor and will save it
 				FD_CLR(newfd,&rfds);
 				
 				do
@@ -233,7 +235,7 @@ void interface(char **args)
 				memset(buffer, '\0', 64);
 				counter--;				
 			}
-			if(FD_ISSET(0,&rfds)) //received a command
+			if(FD_ISSET(0,&rfds)) //received a command via stdin
 			{
 				FD_CLR(0,&rfds);
 				
@@ -284,6 +286,7 @@ void interface(char **args)
 							if(pred->chave!=-1 || suc->chave!=-1)fprintf(stdout, "\tAlready in ring\n");//ring==1
 							else
 							{
+								bent = 0;
 								update(pred, atoi(key), address, port, 0);
 								//fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
 			
