@@ -745,8 +745,8 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 }
 
 /*
- *	determines if this or the predecessor node are the node we are looking for
- *	sends the message by tcp if there are no chords or if path is shorter and by udp otherwise
+ *	determines if this or the predecessor node have the key we are looking for
+ *	sends the message by tcp if there are no chords or if path is shorter by udp
  */
 
 void FNDrecv (char *info, Node *this, Node *suc, Node *pred, Node *chord, char *m, int *ack)
@@ -774,20 +774,20 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred, Node *chord, char *
 	}
 	
 	
-	if(suc->chave==atoi(searchee))
+	if(suc->chave==atoi(searchee)) //successor is the key
 	{
 		sprintf(message, "RSP %s %s %d %s %s\n", key, seq, suc->chave, suc->address, suc->port);
 	}
-	else if(compareDist(atoi(searchee), this->chave, suc->chave, 0)<=0)
+	else if(compareDist(atoi(searchee), this->chave, suc->chave, 0)<=0) //we have the key
 	{
 		sprintf(message, "RSP %s %s %d %s %s\n", key, seq, this->chave, this->address, this->port);
 	}
-	else sprintf(message, "FND %s %s %s %s %s\n", searchee, seq, key, address, port);
+	else sprintf(message, "FND %s %s %s %s %s\n", searchee, seq, key, address, port); //we don´t know who has the key
 	
-	if(chord->chave>-1 && dist(atoi(searchee), suc->chave) > dist(atoi(searchee), chord->chave) && *m=='\0')
+	if(chord->chave>-1 && dist(atoi(searchee), suc->chave) > dist(atoi(searchee), chord->chave) && *m=='\0') //send via udp
 	{
 		info = newline(message); 
-		*ack = GenericUDPsend(chord, message);
+		*ack = GenericUDPsend(chord, message); 
 		strcpy(m, message);
 	}
 	else GenericTCPsend(suc, message);
@@ -795,6 +795,10 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred, Node *chord, char *
 	return;
 	
 }
+
+/*
+ *	handles RSP message(either resends it, prints it or returns EPRED info)
+*/
 
 void *RSPrecv (char *info, Node *this, Node *suc, Element **ht, Node *chord, char *m, int *ack)
 {
@@ -822,10 +826,10 @@ void *RSPrecv (char *info, Node *this, Node *suc, Element **ht, Node *chord, cha
 	}
 	
 	
-	hashi = hash(atoi(seq));
-	aux = Retrieve_del(ht, hashi, atoi(seq));
+	hashi = hash(atoi(seq));	
+	aux = Retrieve_del(ht, hashi, atoi(seq)); //checks if seq number is in hashtable
 	
-	if(aux==NULL){
+	if(aux==NULL){ //exists in hashtable but not necessary for EPRED
 		sprintf(message, "RSP %s %s %s %s %s\n", searchee, seq, key, address, port);
 		if(atoi(searchee) == this->chave) fprintf(stdout, "%s", message);
 		else {
@@ -839,7 +843,7 @@ void *RSPrecv (char *info, Node *this, Node *suc, Element **ht, Node *chord, cha
 			else GenericTCPsend(suc, message);
 		}
 	}
-	else 
+	else //necessary for EPRED
 	{
 		sprintf(message, "EPRED %s %s %s\n", key, address, port);
 		msg = (char *) malloc (strlen(message)+1);
@@ -849,6 +853,11 @@ void *RSPrecv (char *info, Node *this, Node *suc, Element **ht, Node *chord, cha
 	return aux;
 }
 
+/*
+ *	determines if the successor or the predecessor node are the node we are looking for
+ *	sends the message by tcp if there are no chords or if path is shorter and by udp otherwise
+ *  if addr == NULL, then info not needed for EPRED
+*/
 
 void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, Save *addr, Node *chord, char *m, int *ack)
 {
@@ -859,7 +868,7 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 	
 	if(atoi(key)>MAX_NODES || atoi(key)<0)return NULL;
 	
-	if(suc->chave==atoi(key))
+	if(suc->chave==atoi(key)) //suc is the key we are searching for
 	{
 		if (addr==NULL)
 		{
@@ -875,7 +884,7 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 		}
 		return addr;
 	}
-	else if (compareDist(atoi(key), pred->chave, this->chave, 0)<=0)
+	else if (compareDist(atoi(key), pred->chave, this->chave, 0)<=0) //pred has the key we are searching for
 	{
 		if (addr==NULL)
 		{
@@ -891,7 +900,7 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 		}
 		return addr;
 	}
-	else if(compareDist(atoi(key), this->chave, suc->chave, 0)<=0)
+	else if(compareDist(atoi(key), this->chave, suc->chave, 0)<=0) //we has the key we are searching for
 	{
 		if (addr==NULL)
 		{
@@ -907,14 +916,14 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 		}
 		return addr;
 	}
-	else
+	else	//save info on hashtable, hashkey = seq % 20;
 	{
 		hashi = hash(seq);
 		Insert(ht, hashi, seq, addr);
 		sprintf(message, "FND %s %d %d %s %s\n", key, seq, this->chave, this->address, this->port);
 	}
 	
-	if(chord->chave>-1 && dist(atoi(key), suc->chave) > dist(atoi(key), chord->chave) && m[0]=='\0') 
+	if(chord->chave>-1 && dist(atoi(key), suc->chave) > dist(atoi(key), chord->chave) && m[0]=='\0')  //sends to chord
 	{
 		info = newline(message);
 		*ack=GenericUDPsend(chord, message);
