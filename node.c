@@ -2,6 +2,10 @@
 
 #include "node.h"
 
+/*
+ *	allocates space for new node 
+*/
+
 Node *create(int chave, char *address, char* port)
 {
 	Node *new;

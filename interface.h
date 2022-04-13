@@ -15,8 +15,6 @@ typedef struct Save
 	struct sockaddr_in addr;
 }Save;
 
-//struct Save Save;
-
 void interface(char **args);
 char *handle_args(char *arg, char *key);
 char *handle_instructions(char *arg);

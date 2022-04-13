@@ -435,6 +435,7 @@ void interface(char **args)
 				if(strcmp(Buffer, "ACK")==0) //checks if it is an ACK, no there are no really 
 				{
 					fprintf(stdout, "\tReceived: ACK\n");
+					memset(message, '\0', 32);
 					n=close(ack);
 					if(n==-1)
 					{
@@ -934,13 +935,18 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 	return NULL;
 }
 
+/*
+ *	Sends Pred and closes pred->fd and suc->fd
+ *	uncomment sleep if there is problems, just to make sure the predecessor and the successor close theirs first
+*/
+
 void RingLeave(Node *this, Node *suc, Node *pred)
 {
 	int n=0;
-	if(pred->chave!=this->chave)//&& suc->chave!=this->chave
+	if(pred->chave!=this->chave)
 	{
 		predInform(pred, suc);
-		
+		//sleep(1);
 		if(pred->chave!=suc->chave)n = close(suc->fd);
 		if(n==-1)
 		{
@@ -961,6 +967,10 @@ void RingLeave(Node *this, Node *suc, Node *pred)
 	return;
 }
 
+/*
+ *	Checks if port is valid
+*/
+
 int verifyPort(char *port)
 {
 	unsigned int porto, n=0;
@@ -976,6 +986,10 @@ int verifyPort(char *port)
 	
 	return 1;
 }
+
+/*
+ * Checks if address is valid
+*/
 
 int verifyAddr(char *addr)
 {
@@ -1006,6 +1020,10 @@ int compareDist(int this, int a, int b, int flag)
 	else if(max(dista, distb)==distb)return -1;
 	else return -2;
 }
+
+/*
+ * calculates distance between 2 keys starting on measuree
+ */
 
 unsigned int dist(int this, int measuree)
 {

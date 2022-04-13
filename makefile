@@ -22,8 +22,6 @@ network.o: network.c network.h
 
 hash.o: hash.c hash.h
 
-#checks.o: checks.c checks.h
-
 clean:
 	rm -f *.o  ring
 

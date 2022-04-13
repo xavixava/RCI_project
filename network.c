@@ -2,6 +2,10 @@
 #include "network.h"
 #include "geral.h"
 
+/*
+ *	binds SOCK_STREAM to port
+*/
+
 int CreateTcpServer(char *port)
 {
 	int fd, enable=1;
@@ -39,6 +43,10 @@ int CreateTcpServer(char *port)
 	return fd;
 }
 
+/*
+ *	binds SOCK_DGRAM to port
+*/
+
 int CreateUdpServer(char *port)
 {
 	int fd;
@@ -63,6 +71,11 @@ int CreateUdpServer(char *port)
 	
 	return fd;
 }
+
+/*
+ * sends message SELF to new predecessor via TCP
+ * returns fd from newpred
+*/
 
 int selfInform(Node *pred, Node *this)
 {
@@ -118,6 +131,11 @@ int selfInform(Node *pred, Node *this)
 
 	return fd;
 }
+
+/*
+ * sends message PRED to old successor via TCP
+ * returns fd from old_suc
+*/
 
 int predInform(Node *suc, Node *old_suc)
 {
