@@ -15,7 +15,7 @@
 void interface(char **args) 
 {
 	char buffer[64], Buffer[257], *key, *address, *port, *info, message[32];
-	int chave, newfd=0, maxfd = 0, counter, ring=0, TcpFd=0, UdpFd=0, seq, bent=0, ack=0;
+	int chave, newfd=0, maxfd = 0, counter, TcpFd=0, UdpFd=0, seq, bent=0, ack=0;
 	Element **ht;
 	int i=0;
 	Node *this, *suc=NULL, *pred=NULL, *chord=NULL, *aux=NULL;
@@ -154,7 +154,6 @@ void interface(char **args)
 						if(pred->chave==suc->chave) update(suc, -1, NULL, NULL, 0);
 						update(pred, -1, NULL, NULL, 0);
 						fprintf(stdout, "\tClosed pred connection! Exiting ring...\n");
-						ring=0;
 					}
 					else
 					{
@@ -189,7 +188,6 @@ void interface(char **args)
 						suc->fd=0;
 						update(suc, -1, NULL, NULL, 0);
 						fprintf(stdout, "\tClosed suc connection! Exiting ring...\n");
-						ring=0;
 					}
 					else{
 						aux_addr = TcpRead(this, suc, pred, Buffer, buffer, suc->fd, ht, chord, message, &ack);
@@ -245,16 +243,15 @@ void interface(char **args)
 					exit(1);
 				}
 				
-				info = handle_instructions(buffer);
+				info = handle_instructions(buffer);// separates the command from the rest of the info
 				
 				if ((strcmp(buffer, "new\n") == 0)||(strcmp(buffer, "n\n") == 0)) 
 				{
-					update(pred, this->chave, this->address, this->port, 0);					
-					update(suc, this->chave, this->address, this->port, 0);
-					TcpFd = CreateTcpServer(this->port);
-					UdpFd = CreateUdpServer(this->port);
-					fprintf(stdout, "Initiated a new ring\n");
-					ring = 1;
+					update(pred, this->chave, this->address, this->port, 0);	//to create a new ring, we just update both the successor and predecessor				
+					update(suc, this->chave, this->address, this->port, 0);		//to have the same info as the node itself
+					
+					TcpFd = CreateTcpServer(this->port);						//binds SOCK_STREAM socket
+					UdpFd = CreateUdpServer(this->port);						//binds SOCK_DGRAM socket
 				}
 				else if((strcmp(buffer, "show\n") == 0)||(strcmp(buffer, "s\n") == 0))
 				{
@@ -283,21 +280,16 @@ void interface(char **args)
 						{
 							
 
-							if(pred->chave!=-1 || suc->chave!=-1)fprintf(stdout, "\tAlready in ring\n");//ring==1
+							if(pred->chave!=-1 || suc->chave!=-1) fprintf(stdout, "\tAlready in ring\n");
 							else
 							{
-								bent = 0;
+								bent = 0; //in case, user had previously tried a bentry
 								update(pred, atoi(key), address, port, 0);
-								//fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
-			
+								
 								if(TcpFd==0)TcpFd = CreateTcpServer(this->port);
 								if(UdpFd==0)UdpFd = CreateUdpServer(this->port);
 								
-								fprintf(stdout, "Sockets created\n");
-								
 								pred->fd=selfInform(pred, this);
-					
-								ring = 1;
 							}
 						}
 					}
@@ -310,21 +302,19 @@ void interface(char **args)
 					if (address!=NULL)port = handle_instructions(address);
 					if (port!=NULL)info = newline(port);
 
-					if(pred->chave!=-1 || suc->chave!=-1)fprintf(stdout, "\tAlready in ring\n");//ring==1
+					if(pred->chave!=-1 || suc->chave!=-1)fprintf(stdout, "\tAlready in ring\n");
 					else
 					{
 						if(address == NULL && port ==NULL)fprintf(stdout, "Instrução mal formatada(Endereço ou porto mal formatado)");
 						else
 						{
-							aux=create(atoi(key), address, port);
-						
-							//fprintf(stdout, "Bentry: %d %s %s\n", aux->chave, aux->address, aux->port);
+							aux=create(atoi(key), address, port); //this aux Node will be used to store the address and port of helper node
 				
 							sprintf(message, "EFND %d", this->chave);
 						
 							tv.tv_sec = 1;
 							
-							if(UdpFd!=0)
+							if(UdpFd!=0) //if we're not in ring, this UdpFd should be 0 anyway
 							{
 								n = close(UdpFd);
 								if(n==-1)
@@ -333,20 +323,21 @@ void interface(char **args)
 									exit(1);
 								}
 							}
-							UdpFd = GenericUDPsend(aux, message); //atenção, ele pode aqui ficar bloqueado à espera do ACK, pois ainda não foram criados outros sockets
-							
+					
+							UdpFd = GenericUDPsend(aux, message); //sends EFND message to helper node 
+																  //also it will use UdpFd to check for acks and EPRED messages
 							memset(message, '\0', 32);
 							
 							bent=1;
 							ack=1;
 						
-							freeNode(aux);
+							freeNode(aux); //no longer needed
 						}
 					}
 				}
 				else if((strcmp(buffer, "find") == 0)||(strcmp(buffer, "f") == 0))
 				{
-					if (ring==1)fnd(info, this, suc, pred, seq, ht, NULL, chord, message, &ack);
+					if (pred->chave!=-1 && suc->chave!=-1)fnd(info, this, suc, pred, seq, ht, NULL, chord, message, &ack); //if in ring the search for asked key
 					else fprintf(stdout, "\tNot in ring!\n");
 					seq = (seq + 1) % 100;
 				}
@@ -354,9 +345,9 @@ void interface(char **args)
 				{
 					n=0;
 					if(pred->chave==-1 && suc->chave==-1)fprintf(stdout, "\tNot in ring\n");
-					else
+					else	//In ring
 					{
-						RingLeave(this, suc, pred);
+						RingLeave(this, suc, pred); //Sends message to leave ring, also closes pred->fd and suc->fd
 						if(newfd!=0)n = close(newfd);
 						newfd=0;
 						if(n==-1)
@@ -365,12 +356,14 @@ void interface(char **args)
 							exit(1);
 						}
 						close(TcpFd);
+						
 						if(n==-1)
 						{
 							fprintf(stderr, "%s\n", strerror(errno));
 							exit(1);
 						}
 						TcpFd=0;
+						
 						close(UdpFd);
 						if(n==-1)
 						{
@@ -378,20 +371,18 @@ void interface(char **args)
 							exit(1);
 						}
 						UdpFd=0;
-						ring=0;
 					}
 				}
-				else if (strcmp(buffer, "m\n") == 0) fprintf(stdout, "%d %s %s\n", this->chave, this->address, this->port);
-				else if ((strcmp(buffer, "exit\n") == 0)||(strcmp(buffer, "e\n") == 0))
+				else if ((strcmp(buffer, "exit\n") == 0)||(strcmp(buffer, "e\n") == 0)) //exits application and frees allocated space
 				{
-					freeNode(chord);;
+					freeNode(chord);
 					freeNode(suc);
 					freeNode(pred);
 					freeNode(this);
 					FreeHash(ht);
 					return;
 				}
-				else if(strcmp(buffer, "clear\n")==0) system("clear");
+				else if(strcmp(buffer, "clear\n")==0) system("clear"); //clears terminal window
 				else if(strcmp(buffer, "h\n")==0)
 				{
 					fprintf(stdout, "\n========================================================================================================================\n");
@@ -409,28 +400,26 @@ void interface(char **args)
 					port = handle_instructions(address);
 					i=verifyAddr(address);
 					if(i) i=verifyPort(port);
-					if(i)
+					if(i)//if port and address valid then updates chord info
 					{
-						
 						info = newline(port);
 						update(chord, atoi(key), address, port, 0);
 					}
 				}
-				else if(strcmp(buffer, "dchord\n")==0 || strcmp(buffer, "d\n")==0) update(chord, -1, NULL, NULL, 0);
+				else if(strcmp(buffer, "dchord\n")==0 || strcmp(buffer, "d\n")==0) update(chord, -1, NULL, NULL, 0); //clears chord info
 				else fprintf(stdout, "\tComando Desconhecido ou ainda não implementado\n\tPress h for help\n");
 			
 				counter--;
 				memset(buffer, '\0', 64);
 			}
-			if(aux_addr!=NULL)
+			if(aux_addr!=NULL) //this is a special case, if this happpens, then we started a find because we received an EFND and received its RSP
 			{
 				/*fprintf(stdout, "check fam, %d %d\n", addr.sin_family, aux_addr->addr.sin_family);
 				if(addr.sin_port==aux_addr->addr.sin_port)fprintf(stdout,"check port");
 				fprintf(stdout, "port, %u %u\n", addr.sin_port, aux_addr->addr.sin_port);
 				fprintf(stdout, "check addr, %u %u\n", addr.sin_addr.s_addr, aux_addr->addr.sin_addr.s_addr);*/
 				addr=aux_addr->addr;
-				/*if(addr.sin_family!=AF_INET)fprintf(stdout, "ERROR!!!\n");
-				//addr.sin_family=AF_INET;*/
+				
 				n = sendto(UdpFd, aux_addr->message, strlen(aux_addr->message), 0, (struct sockaddr *)&addr, addrlen);
 				if(n==-1)
 				{
@@ -523,8 +512,6 @@ void interface(char **args)
 						fprintf(stdout, "Sockets created\n");
 
 						pred->fd=selfInform(pred, this);
-						
-						ring = 1;
 					}
 					else if(strcmp(Buffer, "FND")==0) FNDrecv(info, this, suc, pred, chord,  message, &ack);
 					else if(strcmp(Buffer, "RSP")==0)
@@ -566,7 +553,7 @@ char *handle_instructions(char *arg)//searches for the first ' ' appearance in a
 	aux = strstr(arg, space);
 	
 	
-	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0 && strcmp(arg, "exit\n")!=0 && strcmp(arg, "e\n")!=0 && strcmp(arg, "clear\n")!=0 && strcmp(arg, "m\n")!=0 && strcmp(arg, "h\n")!=0 && strcmp(arg, "dchord\n")!=0 && strcmp(arg, "d\n")!=0 )
+	if(aux==NULL && strcmp(arg, "n\n")!=0 && strcmp(arg, "new\n")!=0 && strcmp(arg, "show\n")!=0 && strcmp(arg, "s\n")!=0 && strcmp(arg, "leave\n")!=0 && strcmp(arg, "l\n")!=0 && strcmp(arg, "exit\n")!=0 && strcmp(arg, "e\n")!=0 && strcmp(arg, "clear\n")!=0 && strcmp(arg, "h\n")!=0 && strcmp(arg, "dchord\n")!=0 && strcmp(arg, "d\n")!=0 )
 		{
 			fprintf(stdout, "%s", arg);
 			fprintf(stdout, "\t***Mensagem Mal formatada***\n");
@@ -622,7 +609,7 @@ void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int
 	return fun_aux;
 }
 
-void PREDrcv(Node *this, Node *suc, Node *pred, char *info) //cria um fd diferente para pred ao fazer leave sem necessidade, se tiver tempo corrigir 
+void PREDrcv(Node *this, Node *suc, Node *pred, char *info) 
 {
 	char *address, *port, *key;
 	int n=0, chave;
@@ -845,7 +832,7 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 	
 	info = newline(key);
 	
-	fprintf(stdout, "%s\n", key);
+	if(atoi(key)>MAX_NODES || atoi(key)<0)return NULL;
 	
 	if(suc->chave==atoi(key))
 	{
