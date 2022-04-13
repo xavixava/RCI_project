@@ -420,19 +420,19 @@ void interface(char **args)
 				fprintf(stdout, "check addr, %u %u\n", addr.sin_addr.s_addr, aux_addr->addr.sin_addr.s_addr);*/
 				addr=aux_addr->addr;
 				
-				n = sendto(UdpFd, aux_addr->message, strlen(aux_addr->message), 0, (struct sockaddr *)&addr, addrlen);
+				n = sendto(UdpFd, aux_addr->message, strlen(aux_addr->message), 0, (struct sockaddr *)&addr, addrlen);//sends message saved in aux_addr to address saved aux_addr
 				if(n==-1)
 				{
 					fprintf(stderr, "%s\n", strerror(errno));
 					exit(1);
 				}
-				ack = 1;
+				ack = 1;//waits for an ack
 			}
-			if(FD_ISSET(ack,&rfds) && ack > 1)
+			if(FD_ISSET(ack,&rfds) && ack > 1)//sent a message to chord and received a message from it
 			{
 				FD_CLR(ack,&rfds);
 				n = recvfrom(ack, Buffer, 64, 0, (struct sockaddr *)&addr, &addrlen);
-				if(strcmp(Buffer, "ACK")==0)
+				if(strcmp(Buffer, "ACK")==0) //checks if it is an ACK, no there are no really 
 				{
 					fprintf(stdout, "\tReceived: ACK\n");
 					n=close(ack);
@@ -458,10 +458,10 @@ void interface(char **args)
 				
 				fprintf(stdout, " via udp\n");
 				
-				if(strcmp(Buffer, "ACK")==0) ack=0;
-				else 
+				if(strcmp(Buffer, "ACK")==0) ack=0; 
+				else //if it is not an ack
 				{
-					n = sendto(UdpFd, "ACK", 3, 0, (struct sockaddr *)&addr, addrlen); 
+					n = sendto(UdpFd, "ACK", 3, 0, (struct sockaddr *)&addr, addrlen); //then send an ack
 					if(n==-1)
 					{
 						fprintf(stderr, "%s\n", strerror(errno));
@@ -470,7 +470,7 @@ void interface(char **args)
 					
 					info = handle_instructions(Buffer);
 					
-					if(strcmp(Buffer, "EFND")==0)
+					if(strcmp(Buffer, "EFND")==0) //if it is an EFND, we will need to save addrinfo to send EPRED
 					{ 
 						aux_addr = (Save *) malloc(sizeof(Save));
 						aux_addr->addr=addr;
@@ -478,7 +478,7 @@ void interface(char **args)
 						seq = (seq + 1) % 100;
 						if(aux_addr!=NULL)
 						{
-							n = sendto(UdpFd, aux_addr->message, strlen(aux_addr->message), 0, (struct sockaddr *)&addr, addrlen);
+							n = sendto(UdpFd, aux_addr->message, strlen(aux_addr->message), 0, (struct sockaddr *)&addr, addrlen); //If we did not send any message on find then send EPRED, do it later
 							if(n==-1)
 							{
 								fprintf(stderr, "%s\n", strerror(errno));
@@ -489,17 +489,16 @@ void interface(char **args)
 					}
 					else if(strcmp(Buffer, "EPRED")==0)
 					{
-						bent = 0;
+						bent = 0;//no longer waiting for EPRED
 						
 						key = info;
 						address = handle_instructions(info);
 						port = handle_instructions(address);
 						info = newline(port);
 						
-						update(pred, atoi(key), address, port, 0);
-						//fprintf(stdout, "Pentry: %d %s %s\n", pred->chave, pred->address, pred->port);
+						update(pred, atoi(key), address, port, 0); //we now know who is our predecessor
 						
-						n = close(UdpFd);
+						n = close(UdpFd); //closing UdpFd(this one is no longer needed), the bind a new SOCK_DGRAM socket on selected port
 						if(n==-1)
 						{
 							fprintf(stderr, "%s\n", strerror(errno));
@@ -509,15 +508,13 @@ void interface(char **args)
 						if(TcpFd == 0)TcpFd = CreateTcpServer(this->port);
 						UdpFd = CreateUdpServer(this->port);
 
-						fprintf(stdout, "Sockets created\n");
-
 						pred->fd=selfInform(pred, this);
 					}
-					else if(strcmp(Buffer, "FND")==0) FNDrecv(info, this, suc, pred, chord,  message, &ack);
-					else if(strcmp(Buffer, "RSP")==0)
+					else if(strcmp(Buffer, "FND")==0) FNDrecv(info, this, suc, pred, chord,  message, &ack); //Received FND from chord
+					else if(strcmp(Buffer, "RSP")==0) //Received RSP from chord
 					{
 						aux_addr = RSPrecv(info, this, suc, ht, chord, message, &ack);
-						if(aux_addr!=NULL)
+						if(aux_addr!=NULL) //if this happens send EPRED
 						{
 							n = sendto(UdpFd, aux_addr->message, strlen(aux_addr->message), 0, (struct sockaddr *)&addr, addrlen);
 							if(n==-1)
@@ -546,7 +543,11 @@ void interface(char **args)
 	return;
 }
 
-char *handle_instructions(char *arg)//searches for the first ' ' appearance in a string
+/*
+ *	searches for the first ' ' appearance in a string, then puts '\0' on it and returns the pointer to next char(apparently there is a function called strtok that does this already)
+ */
+
+char *handle_instructions(char *arg)
 {
 	char *final=NULL, *aux, *space=" ";
 	
@@ -568,7 +569,11 @@ char *handle_instructions(char *arg)//searches for the first ' ' appearance in a
 	return final;
 }
 
-char *newline(char *arg)//searches for the first newline appearance in a string
+/*
+ *	searches for the first ' ' appearance in a string, then puts '\0' on it and returns the pointer to next char(apparently there is a function called strtok that does this already)
+ */
+
+char *newline(char *arg)
 {
 	char *aux, *nl="\n";
 	aux = strstr(arg, nl);
@@ -580,6 +585,10 @@ char *newline(char *arg)//searches for the first newline appearance in a string
 	else return aux;
 }
 
+/*
+ *	analyses the information read by TCP fds and responds to it
+ */
+
 void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int fd, Element **ht, Node *chord, char *m, int *ack)
 {
 	char *aux, *info;
@@ -588,11 +597,11 @@ void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int
 	fprintf(stdout, "\n\tReceived: %s\n", Buffer);
 	aux = newline(Buffer);
 	
-	while(aux!=NULL)
+	while(aux!=NULL) //if this happened then there is still info in Buffer(bigger buffer)
 	{
 		
-		if(*buffer!='\0')strcat(buffer, Buffer);
-		else strcpy(buffer, Buffer);
+		if(*buffer!='\0')strcat(buffer, Buffer);//if there is already info left that was read from last read that was not complete then concatenate
+		else strcpy(buffer, Buffer);			//if there isn´t then copy next instruction
 	
 		info = handle_instructions(buffer);
 		
@@ -601,26 +610,30 @@ void *TcpRead(Node *this, Node *suc, Node *pred, char *Buffer, char *buffer, int
 		else if(strcmp("RSP", buffer)==0) fun_aux = RSPrecv(info, this, suc, ht, chord, m, ack);
 		else if(strcmp("PRED", buffer)==0) PREDrcv(this, suc, pred, info); //Received PRED message
 		
-		Buffer = aux;
+		Buffer = aux; //advance pointer
 		aux = newline(Buffer);
-		memset(buffer, '\0', 64);
-		if(*Buffer!='\0' && aux==NULL)strcpy(buffer, Buffer);
+		memset(buffer, '\0', 64); //clean smaller buffer
+		if(*Buffer!='\0' && aux==NULL)strcpy(buffer, Buffer);//if there is still info on Buffer but it's not still a complete instruction then copy it to buffer to be concatenated later
 	}	
 	return fun_aux;
 }
+
+/*
+ * updates the information of the predecessor, and sends SELF to new predecessor
+ */
 
 void PREDrcv(Node *this, Node *suc, Node *pred, char *info) 
 {
 	char *address, *port, *key;
 	int n=0, chave;
 	
-	key = info; //transform this into a function later
+	key = info; 
 	address = handle_instructions(info);
 	port = handle_instructions(address);
 	chave=atoi(key);
 	key = newline(port);
 	n = verifyAddr(address);
-	if(n==0)
+	if(n==0) 
 	{
 		fprintf(stdout, "Mensagem malformatada(Endereço mal formatado ou inválido)\n");
 		return;
@@ -630,10 +643,11 @@ void PREDrcv(Node *this, Node *suc, Node *pred, char *info)
 	{
 		fprintf(stdout, "Mensagem malformatada(Porto mal formatado ou inválido)\n");
 		return;
-	}
-					
+	}	
 	
-	if (pred->fd!=0 && pred->chave!=suc->chave)n=close(pred->fd);
+	//message is correct
+	
+	if (pred->fd!=0 && pred->chave!=suc->chave)n=close(pred->fd); //close old predecessor
 	if(n==-1)
 	{
 		fprintf(stderr, "%s\n", strerror(errno));
@@ -645,11 +659,15 @@ void PREDrcv(Node *this, Node *suc, Node *pred, char *info)
 					
 	fprintf(stdout, "\tUpdated pred: %d %s %s %d\n", pred->chave, pred->address, pred->port, pred->fd);
 		
-	if(pred->chave!=this->chave) pred->fd = selfInform(pred, this);
-	else update(suc, pred->chave, pred->address, pred->port, pred->fd);
+	if(pred->chave!=this->chave) pred->fd = selfInform(pred, this); //if we are not alone in ring then send SELF
+	else update(suc, pred->chave, pred->address, pred->port, pred->fd); //else just update successor(he just left the ring)
 	
 	return;
 }
+
+/*
+ * updates the information of the predecessor and sends PRED(if necessary)
+ */
 
 void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 {
@@ -676,20 +694,22 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 		return;
 	}
 	
-	if(chave == this->chave || suc->chave == chave) return;
+	//message is correct
 	
-	aux = create(-1, NULL, NULL);
+	if(chave == this->chave || suc->chave == chave) return; //just in case someone tries to take the node down
+	
+	aux = create(-1, NULL, NULL); //will later be used to check if we received SELF because someone left or someone entered
 	
 	update(aux, suc->chave, suc->address, suc->port, suc->fd);
 	
-	if(pred->chave == this->chave){
+	if(pred->chave == this->chave){ // in case we are the only node in the ring
 		update(suc, chave, address, port, fd);
 		selfInform(suc, this);
 		update(pred, suc->chave, suc->address, suc->port, suc->fd);
 	}
-	else if(suc->chave!=-1)
+	else if(suc->chave!=-1)	//we are already in ring
 	{
-		if(dist(chave, pred->chave) < dist(this->chave, pred->chave) && chave!=pred->chave)
+		if(dist(chave, pred->chave) < dist(this->chave, pred->chave) && chave != pred->chave) //a única verificação que podemos fazer caso alguém tente entrar numa posição errada
 		{
 			fprintf(stdout, "Nó %d está a tentar entrar numa posição errada!\n", chave);
 			n = close(fd);
@@ -704,15 +724,15 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 		
 		update(suc, chave, address, port, fd);
 		
-		if(dist(aux->chave, this->chave) > dist(suc->chave, this->chave))predInform(suc, aux);
-		if(aux->fd!=0 && aux->chave!=pred->chave)n = close(aux->fd);
+		if(dist(aux->chave, this->chave) > dist(suc->chave, this->chave))predInform(suc, aux); //o nó está a tentar entrar
+		if(aux->fd!=0 && aux->chave!=pred->chave)n = close(aux->fd);//o nó está a sair
 		if(n==-1)
 		{
 			fprintf(stderr, "%s\n", strerror(errno));
 			exit(1);
 		}
 	}
-	else 
+	else //we are not in ring just update the successor info
 	{
 		update(suc, chave, address, port, fd);
 	}
@@ -724,7 +744,12 @@ void SelfRcv(Node *this, Node *suc, Node *pred, int fd, char *info)
 	return;
 }
 
-void FNDrecv (char *info, Node *this, Node *suc, Node *pred, Node *chord, char *m, int *ack)	//find almost completed, lacks case with only 2 nodes and 1 node
+/*
+ *	determines if this or the predecessor node are the node we are looking for
+ *	sends the message by tcp if there are no chords or if path is shorter and by udp otherwise
+ */
+
+void FNDrecv (char *info, Node *this, Node *suc, Node *pred, Node *chord, char *m, int *ack)
 {
 	char message[64], *searchee, *seq, *key, *address, *port;
 	int n = 0;
