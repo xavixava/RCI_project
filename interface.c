@@ -106,8 +106,10 @@ void interface(char **args)
 				if(message[0]!='\0')//it's waiting for ack from chord
 				{
 					fprintf(stdout, "did not receive ACK, sending via tcp\n");
-					GenericTCPsend(suc, message);
+					sprintf(buffer, "%s\n", message);
+					GenericTCPsend(suc, buffer);
 					memset(message, '\0', 32);
+					memset(buffer, '\0', 33);
 					}
 				else fprintf(stdout, "did not receive ACK, please try another node\n"); //ack==1, waiting for ack from bentry
 				ack = 0;
@@ -773,7 +775,6 @@ void FNDrecv (char *info, Node *this, Node *suc, Node *pred, Node *chord, char *
 		fprintf(stdout, "Mensagem malformatada(Porto mal formatado ou inválido)\n");
 		return;
 	}
-	
 	
 	if(suc->chave==atoi(searchee)) //successor is the key
 	{

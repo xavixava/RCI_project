@@ -35,6 +35,10 @@ Node *create(int chave, char *address, char* port)
 	return new;
 }
 
+/*
+ * Frees allocates space for node
+*/
+
 void freeNode(Node *this)
 {
 	free(this->address);
@@ -42,6 +46,10 @@ void freeNode(Node *this)
 	free(this);
 	return;
 }
+
+/*
+ * updates node value
+*/
 
 void update(Node *n, int chave, char *address, char* port, int fd)
 {
@@ -53,6 +61,10 @@ void update(Node *n, int chave, char *address, char* port, int fd)
 	n->fd=fd;
 	return;
 }
+
+/*
+ * clears node info
+*/
 
 void nodeClear(Node *n)
 {
