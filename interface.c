@@ -357,7 +357,7 @@ void interface(char **args)
 							fprintf(stderr, "%s\n", strerror(errno));
 							exit(1);
 						}
-						close(TcpFd);
+						if (TcpFd!=0)close(TcpFd);
 						
 						if(n==-1)
 						{
@@ -366,7 +366,7 @@ void interface(char **args)
 						}
 						TcpFd=0;
 						
-						close(UdpFd);
+						if(UdpFd!=0) close(UdpFd);
 						if(n==-1)
 						{
 							fprintf(stderr, "%s\n", strerror(errno));
@@ -377,12 +377,16 @@ void interface(char **args)
 				}
 				else if ((strcmp(buffer, "exit\n") == 0)||(strcmp(buffer, "e\n") == 0)) //exits application and frees allocated space
 				{
-					freeNode(chord);
-					freeNode(suc);
-					freeNode(pred);
-					freeNode(this);
-					FreeHash(ht);
-					return;
+					if(TcpFd!=0 || UdpFd!=0)fprintf(stdout, "Please, leave the ring first\n");
+					else
+					{
+						freeNode(chord);
+						freeNode(suc);
+						freeNode(pred);
+						freeNode(this);
+						FreeHash(ht);
+						return;
+					}
 				}
 				else if(strcmp(buffer, "clear\n")==0) system("clear"); //clears terminal window
 				else if(strcmp(buffer, "h\n")==0)
@@ -868,7 +872,7 @@ void *fnd(char *info, Node *this, Node *suc, Node *pred, int seq, Element **ht, 
 	
 	info = newline(key);
 	
-	if(atoi(key)>MAX_NODES || atoi(key)<0)return NULL;
+	if(atoi(key)>=MAX_NODES || atoi(key)<0)return NULL;
 	
 	if(suc->chave==atoi(key)) //suc is the key we are searching for
 	{
@@ -946,15 +950,15 @@ void RingLeave(Node *this, Node *suc, Node *pred)
 	int n=0;
 	if(pred->chave!=this->chave)
 	{
-		predInform(pred, suc);
+		if(pred->chave!=-1 && suc->chave!=-1)predInform(pred, suc);
 		//sleep(1);
-		if(pred->chave!=suc->chave)n = close(suc->fd);
+		if(pred->chave!=suc->chave && suc->fd != 0)n = close(suc->fd);
 		if(n==-1)
 		{
 			fprintf(stderr, "%s\n", strerror(errno));
 			exit(1);
 		}
-		n = close(pred->fd);
+		if (pred->fd!=0)n = close(pred->fd);
 		if(n==-1)
 		{
 			fprintf(stderr, "%s\n", strerror(errno));
@@ -1010,6 +1014,7 @@ int verifyAddr(char *addr)
 *				 -1 if dist(a, this)<dist(b, this)
 *	Extra info: if flag==0 no chords are considered, if flag==1 consider chord				
 */
+
 int compareDist(int this, int a, int b, int flag)
 {
 	unsigned int dista, distb;
