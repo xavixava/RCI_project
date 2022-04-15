@@ -346,7 +346,7 @@ void interface(char **args)
 				else if ((strcmp(buffer, "leave\n") == 0)||(strcmp(buffer, "l\n") == 0))
 				{
 					n=0;
-					if(pred->chave==-1 && suc->chave==-1)fprintf(stdout, "\tNot in ring\n");
+					if(pred->chave==-1 && suc->chave==-1 && UdpFd==0 && TcpFd==0)fprintf(stdout, "\tNot in ring\n");
 					else	//In ring
 					{
 						RingLeave(this, suc, pred); //Sends message to leave ring, also closes pred->fd and suc->fd
@@ -357,8 +357,8 @@ void interface(char **args)
 							fprintf(stderr, "%s\n", strerror(errno));
 							exit(1);
 						}
-						if (TcpFd!=0)close(TcpFd);
 						
+						if (TcpFd!=0)close(TcpFd);
 						if(n==-1)
 						{
 							fprintf(stderr, "%s\n", strerror(errno));
